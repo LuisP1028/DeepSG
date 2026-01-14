@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tanh Visualization // Ditherpunk</title>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --accent-color: #00FF41;
+            --dim-color: #003b0f; /* For subtle grid lines */
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none; /* Prevent text selection while dragging */
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--accent-color);
+            font-family: 'Courier New', Courier, monospace;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- LAYOUT --- */
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+        }
+
+        /* Desktop: Side-by-side layout */
+        @media (min-width: 768px) {
+            .container {
+                flex-direction: row;
+            }
+        }
+
+        /* --- CANVAS PANEL --- */
+        #canvas-wrapper {
+            flex: 2;
+            position: relative;
+            border-bottom: 2px solid var(--accent-color);
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        @media (min-width: 768px) {
+            #canvas-wrapper {
+                border-bottom: none;
+                border-right: 2px solid var(--accent-color);
+            }
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* --- DATA PANEL --- */
+        #data-panel {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 15px;
+            background-color: var(--bg-color);
+            font-size: 14px;
+            overflow-y: auto;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            border-bottom: 1px dashed var(--accent-color);
+            padding-bottom: 5px;
+        }
+
+        .blink {
+            animation: blinker 1s linear infinite;
+        }
+
+        @keyframes blinker {
+            50% { opacity: 0; }
+        }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+
+        .label {
+            opacity: 0.8;
+        }
+
+        .value {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        /* STATUS BADGE */
+        #status-badge {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid var(--accent-color);
+            text-align: center;
+            font-weight: bold;
+            transition: all 0.1s;
+        }
+
+        /* Inverted colors for Saturated state */
+        .saturated {
+            background-color: var(--accent-color);
+            color: var(--bg-color);
+            border: 1px solid var(--accent-color);
+        }
+
+        .formula {
+            font-size: 0.8rem;
+            line-height: 1.4;
+            color: var(--accent-color);
+            opacity: 0.7;
+            margin-bottom: 15px;
+        }
+
+        .scanline {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.2));
+            background-size: 100% 4px;
+            pointer-events: none;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Panel A: The Visual Scope -->
+        <div id="canvas-wrapper">
+            <canvas id="scope"></canvas>
+            <div class="scanline"></div> <!-- Retro scanline overlay -->
+        </div>
+
+        <!-- Panel B: The Readout -->
+        <div id="data-panel">
+            <h1>> Tanh Explorer<span class="blink">_</span></h1>
+            
+            <div class="formula">
+                FORMULA:<br>
+                f(x) = (e^x - e^-x) / (e^x + e^-x)<br>
+                f'(x) = 1 - f(x)^2
+            </div>
+
+            <div class="data-row">
+                <span class="label">[INPUT x]</span>
+                <span class="value" id="val-x">0.000</span>
+            </div>
+
+            <div class="data-row">
+                <span class="label">[OUTPUT y]</span>
+                <span class="value" id="val-y">0.000</span>
+            </div>
+
+            <div class="data-row">
+                <span class="label">[GRADIENT]</span>
+                <span class="value" id="val-grad">1.000</span>
+            </div>
+
+            <div id="status-badge">
+                STATUS: INITIALIZING...
+            </div>
+            
+            <div style="margin-top:20px; font-size: 0.7rem; opacity: 0.5;">
+                >> DRAG MOUSE/FINGER ON GRAPH TO SIMULATE INPUT
+            </div>
+        </div>
+    </div>
+
+<script>
+    /**
+     * TANH VISUALIZER
+     * Style: Ditherpunk / Green Monochrome
+     */
+
+    const canvas = document.getElementById('scope');
+    const ctx = canvas.getContext('2d');
+    const wrapper = document.getElementById('canvas-wrapper');
+
+    // UI Elements
+    const elX = document.getElementById('val-x');
+    const elY = document.getElementById('val-y');
+    const elGrad = document.getElementById('val-grad');
+    const elStatus = document.getElementById('status-badge');
+
+    // Configuration
+    const CONFIG = {
+        minX: -5,
+        maxX: 5,
+        minY: -1.5,
+        maxY: 1.5,
+        color: '#00FF41',
+        bg: '#000000',
+        gridColor: '#003b0f'
+    };
+
+    // State
+    let state = {
+        x: 0,       // Current input value
+        width: 0,
+        height: 0,
+        scaleX: 0,
+        scaleY: 0,
+        isDragging: false
+    };
+
+    // --- MATH HELPERS ---
+
+    function tanh(x) {
+        return Math.tanh(x);
+    }
+
+    function tanhDerivative(x) {
+        // The derivative of tanh(x) is 1 - tanh(x)^2
+        const t = Math.tanh(x);
+        return 1 - (t * t);
+    }
+
+    // Coordinate Mapping
+    function mapX(x) {
+        // Map logical X (-5 to 5) to screen X (0 to width)
+        return (x - CONFIG.minX) / (CONFIG.maxX - CONFIG.minX) * state.width;
+    }
+
+    function mapY(y) {
+        // Map logical Y (-1.5 to 1.5) to screen Y (height to 0) - inverted for Canvas
+        return state.height - ((y - CONFIG.minY) / (CONFIG.maxY - CONFIG.minY) * state.height);
+    }
+
+    function unmapX(screenX) {
+        // Map screen X back to logical X
+        return (screenX / state.width) * (CONFIG.maxX - CONFIG.minX) + CONFIG.minX;
+    }
+
+    // --- DITHERING PATTERN GENERATOR ---
+    
+    // Creates a 4x4 checkerboard pattern to simulate shading without opacity
+    function createDitherPattern() {
+        const patternCanvas = document.createElement('canvas');
+        patternCanvas.width = 4;
+        patternCanvas.height = 4;
+        const pCtx = patternCanvas.getContext('2d');
+        
+        // Fill background black
+        pCtx.fillStyle = CONFIG.bg;
+        pCtx.fillRect(0, 0, 4, 4);
+        
+        // Draw green pixels (checkerboard)
+        pCtx.fillStyle = CONFIG.color;
+        pCtx.fillRect(0, 0, 1, 1);
+        pCtx.fillRect(2, 2, 1, 1);
+        
+        return ctx.createPattern(patternCanvas, 'repeat');
+    }
+
+    const ditherPattern = createDitherPattern();
+
+    // --- RENDER LOOP ---
+
+    function resize() {
+        const rect = wrapper.getBoundingClientRect();
+        // Handle HiDPI displays
+        const dpr = window.devicePixelRatio || 1;
+        
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        
+        ctx.scale(dpr, dpr);
+        
+        state.width = rect.width;
+        state.height = rect.height;
+        
+        draw();
+    }
+
+    function drawGrid() {
+        ctx.strokeStyle = CONFIG.gridColor;
+        ctx.lineWidth = 1;
+        
+        // Vertical lines (for integers -5 to 5)
+        for (let i = CONFIG.minX; i <= CONFIG.maxX; i++) {
+            ctx.beginPath();
+            const x = mapX(i);
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, state.height);
+            // Dashed line if it's not the center
+            if (i !== 0) ctx.setLineDash([2, 4]);
+            else ctx.setLineDash([]); // Solid line for Y-axis
+            ctx.stroke();
+        }
+
+        // Horizontal lines (for integers -1 to 1)
+        for (let i = -1; i <= 1; i += 0.5) {
+            ctx.beginPath();
+            const y = mapY(i);
+            ctx.moveTo(0, y);
+            ctx.lineTo(state.width, y);
+            if (i !== 0) ctx.setLineDash([2, 4]);
+            else ctx.setLineDash([]); // Solid line for X-axis
+            ctx.stroke();
+        }
+        
+        ctx.setLineDash([]); // Reset
+    }
+
+    function drawCurve() {
+        ctx.strokeStyle = CONFIG.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        // Iterate across the screen width to draw the smooth curve
+        for (let px = 0; px <= state.width; px+=2) {
+            const logicalX = unmapX(px);
+            const logicalY = tanh(logicalX);
+            const py = mapY(logicalY);
+            
+            if (px === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+    }
+
+    function drawActiveZone() {
+        // We fill the area under the curve to visualize the "Magnitude"
+        // But using our dither pattern
+        ctx.fillStyle = ditherPattern;
+        ctx.beginPath();
+        
+        const startX = mapX(0); // Center
+        const currentPx = mapX(state.x);
+        
+        // Draw shape from center to current point
+        ctx.moveTo(startX, mapY(0));
+        
+        // Walk the curve to the current point
+        const step = state.x > 0 ? 2 : -2;
+        // Logic to prevent infinite loops if on exact pixel
+        if (Math.abs(startX - currentPx) > 1) {
+             for (let px = startX; (step > 0 ? px <= currentPx : px >= currentPx); px += step) {
+                const lx = unmapX(px);
+                ctx.lineTo(px, mapY(tanh(lx)));
+            }
+        }
+       
+        ctx.lineTo(currentPx, mapY(0));
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    function drawTangent() {
+        const tx = state.x;
+        const ty = tanh(tx);
+        const slope = tanhDerivative(tx);
+
+        const screenX = mapX(tx);
+        const screenY = mapY(ty);
+
+        // Draw the Point
+        ctx.fillStyle = CONFIG.bg;
+        ctx.strokeStyle = CONFIG.color;
+        ctx.lineWidth = 2;
+        
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Draw the Tangent Line
+        // We calculate a short line segment based on slope
+        const lineLength = 60; // pixels
+        // Angle of slope in screen space requires care due to aspect ratio
+        // Simple approximation for visualization:
+        // dy/dx = slope. 
+        
+        // Let's project two points nearby
+        const dx = 1.0; 
+        const dy = slope * dx;
+        
+        // Map relative offsets to screen pixels (approximate for visuals)
+        const p1x = mapX(tx - 0.5);
+        const p1y = mapY(ty - (slope * 0.5));
+        const p2x = mapX(tx + 0.5);
+        const p2y = mapY(ty + (slope * 0.5));
+
+        ctx.beginPath();
+        ctx.moveTo(p1x, p1y);
+        ctx.lineTo(p2x, p2y);
+
+        // STYLING BASED ON GRADIENT (The Lesson)
+        if (slope < 0.1) {
+            // Vanishing Gradient -> Dotted line, "Static" feel
+            ctx.setLineDash([2, 3]);
+            ctx.lineWidth = 1;
+            
+            // Draw some random "static" noise around the point
+            ctx.fillStyle = CONFIG.color;
+            for(let i=0; i<10; i++) {
+                const rx = screenX + (Math.random() * 20 - 10);
+                const ry = screenY + (Math.random() * 20 - 10);
+                ctx.fillRect(rx, ry, 1, 1);
+            }
+
+        } else {
+            // Strong Gradient -> Solid thick line
+            ctx.setLineDash([]);
+            ctx.lineWidth = 2;
+        }
+        
+        ctx.stroke();
+        ctx.setLineDash([]); // Reset
+    }
+
+    function updateUI() {
+        const y = tanh(state.x);
+        const grad = tanhDerivative(state.x);
+
+        elX.innerText = state.x.toFixed(3);
+        elY.innerText = y.toFixed(3);
+        elGrad.innerText = grad.toFixed(3);
+
+        // Status Logic
+        if (grad < 0.1) {
+            elStatus.innerText = "STATUS: SATURATED [VANISHING]";
+            elStatus.className = "saturated";
+        } else if (grad > 0.5) {
+            elStatus.innerText = "STATUS: LEARNING [OPTIMAL]";
+            elStatus.className = "";
+        } else {
+            elStatus.innerText = "STATUS: TRANSITIONING...";
+            elStatus.className = "";
+        }
+    }
+
+    function draw() {
+        // Clear screen
+        ctx.fillStyle = CONFIG.bg;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        drawGrid();
+        drawActiveZone(); // Dithered fill under curve
+        drawCurve();
+        drawTangent();
+    }
+
+    // --- INTERACTION ---
+
+    function handleInput(clientX) {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = clientX - rect.left;
+        
+        // Clamp to screen bounds
+        const clampedX = Math.max(0, Math.min(mouseX, state.width));
+        
+        // Convert to Logical X
+        state.x = unmapX(clampedX);
+        
+        draw();
+        updateUI();
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+        state.isDragging = true;
+        handleInput(e.clientX);
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (state.isDragging) {
+            handleInput(e.clientX);
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        state.isDragging = false;
+    });
+
+    // Touch Support
+    canvas.addEventListener('touchstart', (e) => {
+        state.isDragging = true;
+        handleInput(e.touches[0].clientX);
+        e.preventDefault(); // Prevent scrolling
+    }, {passive: false});
+
+    canvas.addEventListener('touchmove', (e) => {
+        if (state.isDragging) {
+            handleInput(e.touches[0].clientX);
+            e.preventDefault();
+        }
+    }, {passive: false});
+
+    window.addEventListener('resize', resize);
+
+    // --- INIT ---
+    resize();
+    updateUI();
+
+</script>
+</body>
+</html>

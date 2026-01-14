@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ResNet Ditherpunk Visualizer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        :root {
+            --bg-color: #000000;
+            --fg-color: #00FF00;
+            --dim-color: #004400;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            color: var(--fg-color);
+            font-family: 'VT323', monospace;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* UI LAYOUT */
+        #ui-top {
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 2px solid var(--fg-color);
+            padding: 0 20px;
+            font-size: 1.2rem;
+            z-index: 10;
+            background: var(--bg-color);
+        }
+
+        .step {
+            margin: 0 10px;
+            opacity: 0.3;
+            transition: opacity 0.3s;
+        }
+
+        .step.active {
+            opacity: 1;
+            text-shadow: 0 0 5px var(--fg-color);
+            font-weight: bold;
+        }
+
+        #canvas-container {
+            flex-grow: 1;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #111;
+        }
+
+        /* The actual canvas is rendered small, then scaled up with crisp edges */
+        canvas {
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* CRT Scanline effect overlay */
+        #scanlines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                to bottom,
+                rgba(0, 255, 0, 0),
+                rgba(0, 255, 0, 0) 50%,
+                rgba(0, 0, 0, 0.4) 50%,
+                rgba(0, 0, 0, 0.4)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        #ui-bottom {
+            height: 80px;
+            border-top: 2px solid var(--fg-color);
+            padding: 15px;
+            font-size: 1.5rem;
+            background: var(--bg-color);
+            z-index: 10;
+            display: flex;
+            align-items: center;
+        }
+
+        #typewriter {
+            border-right: 10px solid var(--fg-color);
+            white-space: pre-wrap;
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            50% { border-color: transparent; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- TOP NAV -->
+    <div id="ui-top">
+        <span id="step-1" class="step">[1. RESIDUAL]</span>
+        <span class="step">-&gt;</span>
+        <span id="step-2" class="step">[2. CONV BLOCK]</span>
+        <span class="step">-&gt;</span>
+        <span id="step-3" class="step">[3. IDENTITY]</span>
+        <span class="step">-&gt;</span>
+        <span id="step-4" class="step">[4. BACKPROP]</span>
+    </div>
+
+    <!-- MAIN STAGE -->
+    <div id="canvas-container">
+        <canvas id="mainCanvas"></canvas>
+        <div id="scanlines"></div>
+    </div>
+
+    <!-- BOTTOM NARRATIVE -->
+    <div id="ui-bottom">
+        <span id="typewriter">Initializing System...</span>
+    </div>
+
+    <script>
+        /**
+         * CORE SETUP
+         */
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        
+        // Internal Resolution (Low Res for Dithering look)
+        const RES_X = 320;
+        const RES_Y = 240;
+        
+        canvas.width = RES_X;
+        canvas.height = RES_Y;
+
+        // Create an offscreen buffer to draw grayscale to before dithering
+        const bufferCanvas = document.createElement('canvas');
+        bufferCanvas.width = RES_X;
+        bufferCanvas.height = RES_Y;
+        const bctx = bufferCanvas.getContext('2d');
+
+        // State Machine
+        let sceneIndex = 0;
+        let sceneTime = 0;
+        const SCENE_DURATION = 350; // frames per scene approx
+        
+        const scenes = [
+            { id: 1, text: "RESIDUAL BLOCK: Calculating the difference. Input + Features = Output." },
+            { id: 2, text: "CONV BLOCK: Downsampling. Halving resolution, doubling feature depth." },
+            { id: 3, text: "IDENTITY BLOCK: Refining features without changing dimensions." },
+            { id: 4, text: "BACKPROPAGATION: Skip connections allow error signals to travel instantly." }
+        ];
+
+        /**
+         * ASSET GENERATION (Procedural Textures)
+         */
+        
+        // Generate a Noise Pattern (Road)
+        const roadPattern = document.createElement('canvas');
+        roadPattern.width = 64;
+        roadPattern.height = 64;
+        const rCtx = roadPattern.getContext('2d');
+        for(let i=0; i<64*64; i++) {
+            const v = Math.random() * 100 + 50;
+            rCtx.fillStyle = `rgb(${v},${v},${v})`;
+            rCtx.fillRect(i%64, Math.floor(i/64), 1, 1);
+        }
+
+        // Generate a Crack Pattern
+        const crackPattern = document.createElement('canvas');
+        crackPattern.width = 64;
+        crackPattern.height = 64;
+        const cCtx = crackPattern.getContext('2d');
+        cCtx.strokeStyle = '#FFFFFF';
+        cCtx.lineWidth = 3;
+        cCtx.beginPath();
+        cCtx.moveTo(10, 10);
+        cCtx.lineTo(25, 20);
+        cCtx.lineTo(20, 35);
+        cCtx.lineTo(40, 45);
+        cCtx.lineTo(50, 55);
+        cCtx.stroke();
+
+        /**
+         * SCENE RENDERERS
+         */
+
+        function drawResidualScene(t) {
+            // Background Elements
+            bctx.fillStyle = "#222"; 
+            bctx.font = "10px monospace";
+            bctx.fillText("INPUT (x)", 10, 110);
+            
+            // Animation Progress (0 to 1)
+            let p = (t % SCENE_DURATION) / SCENE_DURATION;
+            
+            let xPos = p * (RES_X + 64) - 64;
+            let splitX = 60;
+            let mergeX = 220;
+
+            // Draw Pipes
+            bctx.strokeStyle = "#444";
+            bctx.lineWidth = 2;
+            
+            // Top Rail (Skip)
+            bctx.beginPath();
+            bctx.moveTo(splitX, 80);
+            bctx.lineTo(mergeX, 80);
+            bctx.stroke();
+
+            // Bottom Rail (Conv)
+            bctx.beginPath();
+            bctx.moveTo(splitX, 160);
+            bctx.lineTo(100, 160); // Enter Box
+            bctx.stroke();
+            bctx.strokeRect(100, 130, 60, 60); // Conv Box
+            bctx.fillStyle = "#000"; bctx.fillRect(101, 131, 58, 58);
+            bctx.fillStyle = "#AAA"; bctx.fillText("F(x)", 120, 165);
+            
+            bctx.beginPath();
+            bctx.moveTo(160, 160); // Exit Box
+            bctx.lineTo(mergeX, 160);
+            bctx.stroke();
+
+            // Vertical Connectors
+            bctx.beginPath();
+            bctx.setLineDash([2, 2]);
+            bctx.moveTo(splitX, 120); bctx.lineTo(splitX, 80); // Up
+            bctx.moveTo(splitX, 120); bctx.lineTo(splitX, 160); // Down
+            bctx.moveTo(mergeX, 80); bctx.lineTo(mergeX, 110); // Merge Down
+            bctx.moveTo(mergeX, 160); bctx.lineTo(mergeX, 130); // Merge Up
+            bctx.stroke();
+            bctx.setLineDash([]);
+
+            // Plus Sign
+            bctx.fillStyle = "#FFF";
+            bctx.font = "30px monospace";
+            bctx.fillText("+", mergeX - 8, 130);
+
+            // -- The Data Packets --
+
+            // 1. Initial Packet
+            if (xPos < splitX) {
+                bctx.drawImage(roadPattern, xPos, 120 - 32);
+                bctx.drawImage(crackPattern, xPos, 120 - 32); // Input has both
+            }
+
+            // 2. Split Packets
+            if (xPos > splitX && xPos < mergeX) {
+                // Top (Skip Connection) - Carries Everything
+                bctx.drawImage(roadPattern, xPos, 80 - 32);
+                bctx.drawImage(crackPattern, xPos, 80 - 32);
+                
+                // Bottom (Residual) - Inside box, Road fades, Crack remains
+                let localX = xPos;
+                if (localX > 100 && localX < 160) {
+                    // Inside transformation box
+                    bctx.drawImage(crackPattern, localX, 160 - 32); // Only crack
+                } else {
+                    bctx.drawImage(roadPattern, localX, 160 - 32);
+                    bctx.drawImage(crackPattern, localX, 160 - 32);
+                }
+            }
+
+            // 3. Merged Output
+            if (xPos > mergeX) {
+                bctx.drawImage(roadPattern, xPos, 120 - 32);
+                bctx.lineWidth = 4; // Emphasize the crack
+                bctx.strokeStyle = "#FFF";
+                bctx.strokeRect(xPos, 120-32, 64, 64); // Highlight
+                bctx.drawImage(crackPattern, xPos, 120 - 32);
+            }
+        }
+
+        function drawConvScene(t) {
+            let p = (t % SCENE_DURATION) / SCENE_DURATION;
+            
+            let size = 128 - (p * 64); // 128 -> 64
+            if (p > 0.8) size = 64;
+            
+            let depth = p * 20; // 0 -> 20
+            if (p > 0.8) depth = 20;
+
+            let cx = RES_X / 2;
+            let cy = RES_Y / 2;
+
+            // Draw Compressor Box
+            bctx.strokeStyle = "#888";
+            bctx.strokeRect(cx - 80, cy - 80, 160, 160);
+            bctx.fillStyle = "#FFF";
+            bctx.fillText("STRIDE = 2", cx - 30, cy - 90);
+
+            // Draw Data Block
+            // We fake 3D by drawing multiple offset rects
+            let layers = Math.floor(1 + (p * 5));
+            
+            for(let i = 0; i < layers; i++) {
+                let offset = i * 4;
+                let alpha = 255 - (i * 40);
+                let s = size;
+                
+                bctx.fillStyle = `rgba(${alpha}, ${alpha}, ${alpha}, 1)`;
+                bctx.strokeStyle = "#000";
+                
+                // Draw centered rect
+                bctx.fillRect(cx - (s/2) + offset, cy - (s/2) - offset, s, s);
+                bctx.strokeRect(cx - (s/2) + offset, cy - (s/2) - offset, s, s);
+                
+                // Draw grid lines on top layer
+                if(i === layers - 1) {
+                    bctx.strokeStyle = "#555";
+                    bctx.beginPath();
+                    bctx.moveTo(cx + offset, cy - (s/2) - offset);
+                    bctx.lineTo(cx + offset, cy + (s/2) - offset);
+                    bctx.moveTo(cx - (s/2) + offset, cy - offset);
+                    bctx.lineTo(cx + (s/2) + offset, cy - offset);
+                    bctx.stroke();
+                }
+            }
+            
+            // Labels
+            bctx.fillStyle = "#FFF";
+            if (p < 0.5) bctx.fillText("128x128", cx - 20, cy + 80);
+            else bctx.fillText("64x64 (Depth x2)", cx - 40, cy + 80);
+        }
+
+        function drawIdentityScene(t) {
+            let p = (t % SCENE_DURATION) / SCENE_DURATION;
+            let cx = RES_X / 2;
+            let cy = RES_Y / 2;
+
+            // Draw Identity Blocks (Outline)
+            bctx.strokeStyle = "#444";
+            bctx.setLineDash([4, 4]);
+            bctx.strokeRect(cx - 50, cy - 50, 100, 100);
+            bctx.setLineDash([]);
+            bctx.fillStyle = "#888";
+            bctx.fillText("ID BLOCK", cx - 20, cy - 60);
+
+            // The Feature Map (Static Size)
+            bctx.fillStyle = "#222";
+            bctx.fillRect(cx - 32, cy - 32, 64, 64);
+            
+            // Draw Noisy Underlying Data
+            bctx.drawImage(roadPattern, cx - 32, cy - 32);
+
+            // Draw The Scanner Line
+            let scanX = (cx - 32) + (p * 64);
+            
+            bctx.strokeStyle = "#FFF";
+            bctx.beginPath();
+            bctx.moveTo(scanX, cy - 32);
+            bctx.lineTo(scanX, cy + 32);
+            bctx.stroke();
+
+            // Draw Refined Feature (Reveal behind scanner)
+            // Save context to clip
+            bctx.save();
+            bctx.beginPath();
+            bctx.rect(cx - 32, cy - 32, scanX - (cx-32), 64);
+            bctx.clip();
+            
+            // High contrast version (Refined)
+            bctx.fillStyle = "#FFF";
+            bctx.fillRect(cx - 32, cy - 32, 64, 64);
+            bctx.strokeStyle = "#000";
+            bctx.lineWidth = 2;
+            // Draw clean geometric crack
+            bctx.beginPath();
+            bctx.moveTo(cx - 10, cy - 10);
+            bctx.lineTo(cx + 5, cy);
+            bctx.lineTo(cx + 10, cy + 15);
+            bctx.stroke();
+            
+            bctx.restore();
+        }
+
+        function drawBackpropScene(t) {
+            // Draw Chain of Blocks
+            let blockCount = 6;
+            let startX = 20;
+            let gap = 45;
+
+            bctx.strokeStyle = "#444";
+            bctx.fillStyle = "#111";
+            
+            for(let i=0; i<blockCount; i++) {
+                let bx = startX + (i * gap);
+                bctx.fillRect(bx, 100, 30, 40);
+                bctx.strokeRect(bx, 100, 30, 40);
+                
+                // Connector
+                if(i < blockCount -1) {
+                    bctx.beginPath();
+                    bctx.moveTo(bx + 30, 120);
+                    bctx.lineTo(bx + gap, 120);
+                    bctx.stroke();
+                }
+
+                // Skip Connection Rail (Top)
+                bctx.strokeStyle = "#666";
+                bctx.beginPath();
+                bctx.moveTo(bx + 15, 100);
+                bctx.lineTo(bx + 15, 80);
+                bctx.lineTo(bx + gap + 15, 80);
+                bctx.lineTo(bx + gap + 15, 100);
+                bctx.stroke();
+            }
+
+            // Error Signal Source
+            let pulse = Math.sin(t * 0.1) * 128 + 128;
+            bctx.fillStyle = `rgb(${pulse}, ${pulse}, ${pulse})`;
+            bctx.beginPath();
+            bctx.arc(startX + (blockCount * gap), 120, 10, 0, Math.PI*2);
+            bctx.fill();
+            bctx.fillText("ERROR", startX + (blockCount * gap) - 10, 145);
+
+            // Particles
+            // We just procedurally draw dots moving left based on time
+            
+            // 1. Slow Particles (Vanishing Gradient) - Through middle
+            for(let i=0; i<10; i++) {
+                let offset = (t * 1 + (i * 30)) % 300;
+                let px = (startX + (blockCount * gap)) - offset;
+                
+                // Fade out as they go left
+                let alpha = (px - startX) / 200 * 255;
+                if(px > startX) {
+                    bctx.fillStyle = `rgba(${alpha}, ${alpha}, ${alpha}, 1)`;
+                    bctx.fillRect(px, 120-2, 4, 4);
+                }
+            }
+
+            // 2. Fast Particles (ResNet Superhighway) - Top Rail
+            for(let i=0; i<5; i++) {
+                let offset = (t * 5 + (i * 60)) % 300; // Much faster
+                let px = (startX + (blockCount * gap)) - offset;
+                
+                if(px > startX) {
+                    bctx.fillStyle = "#FFF"; // Bright white, no fade
+                    bctx.fillRect(px, 80-2, 6, 6);
+                }
+            }
+        }
+
+        /**
+         * DITHERING ENGINE (Atkinson)
+         */
+        function applyDither() {
+            // Get pixel data from the buffer
+            const imageData = bctx.getImageData(0, 0, RES_X, RES_Y);
+            const data = imageData.data;
+            const w = RES_X;
+            const h = RES_Y;
+
+            // Atkinson Dithering Kernel
+            //       X   1/8 1/8
+            //   1/8 1/8 1/8
+            //       1/8
+
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const i = (y * w + x) * 4;
+                    
+                    // Convert to grayscale (simple avg)
+                    const oldPixel = (data[i] + data[i+1] + data[i+2]) / 3;
+                    
+                    // Threshold
+                    const newPixel = oldPixel < 128 ? 0 : 255;
+                    const error = Math.floor((oldPixel - newPixel) / 8);
+
+                    // Set Pixel to Black or Green
+                    data[i] = 0;     // R
+                    data[i+1] = newPixel; // G (Green Channel only)
+                    data[i+2] = 0;     // B
+                    // Alpha remains 255
+
+                    if (error === 0) continue;
+
+                    // Distribute Error
+                    // Right
+                    if (x + 1 < w)       data[((y)*w + (x+1))*4 + 1] += error;
+                    if (x + 2 < w)       data[((y)*w + (x+2))*4 + 1] += error;
+                    // Bottom Left
+                    if (x > 0 && y + 1 < h) data[((y+1)*w + (x-1))*4 + 1] += error;
+                    // Bottom
+                    if (y + 1 < h)       data[((y+1)*w + (x))*4 + 1] += error;
+                    // Bottom Right
+                    if (x + 1 < w && y + 1 < h) data[((y+1)*w + (x+1))*4 + 1] += error;
+                    // Bottom 2
+                    if (y + 2 < h)       data[((y+2)*w + (x))*4 + 1] += error;
+                }
+            }
+
+            // Put processed data onto the visible canvas
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        /**
+         * MAIN LOOP
+         */
+        
+        // UI Helpers
+        const uiText = document.getElementById('typewriter');
+        const steps = [
+            document.getElementById('step-1'),
+            document.getElementById('step-2'),
+            document.getElementById('step-3'),
+            document.getElementById('step-4')
+        ];
+
+        function updateUI(idx) {
+            // Text
+            if (uiText.innerText !== scenes[idx].text) {
+                uiText.innerText = scenes[idx].text;
+            }
+            // Nav steps
+            steps.forEach((s, i) => {
+                if(i === idx) s.classList.add('active');
+                else s.classList.remove('active');
+            });
+        }
+
+        function loop() {
+            sceneTime++;
+            
+            // Check Scene Transition
+            if (sceneTime > SCENE_DURATION) {
+                sceneTime = 0;
+                sceneIndex = (sceneIndex + 1) % 4;
+            }
+            
+            updateUI(sceneIndex);
+
+            // Clear Buffer (Draw Black)
+            bctx.fillStyle = "#000";
+            bctx.fillRect(0, 0, RES_X, RES_Y);
+
+            // Draw Scene to Buffer
+            switch(sceneIndex) {
+                case 0: drawResidualScene(sceneTime); break;
+                case 1: drawConvScene(sceneTime); break;
+                case 2: drawIdentityScene(sceneTime); break;
+                case 3: drawBackpropScene(sceneTime); break;
+            }
+
+            // Apply Dither to Screen
+            applyDither();
+
+            requestAnimationFrame(loop);
+        }
+
+        // Start
+        loop();
+
+    </script>
+</body>
+</html>

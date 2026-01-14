@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaky ReLU // Ditherpunk</title>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --fg-color: #00FF41;
+            --dim-color: #00330d;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--fg-color);
+            font-family: 'Courier New', Courier, monospace;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* LAYOUT GRID */
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            grid-template-rows: auto 1fr 1fr;
+            height: 100%;
+            width: 100%;
+        }
+
+        @media (min-width: 1024px) {
+            .layout {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto 1fr;
+            }
+        }
+
+        /* HEADER / CONTROLS */
+        .controls {
+            grid-column: 1 / -1;
+            padding: 15px;
+            border-bottom: 2px solid var(--fg-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-color);
+            z-index: 10;
+        }
+
+        .title-block h1 {
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .title-block small {
+            opacity: 0.7;
+            font-size: 0.8rem;
+        }
+
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 5px;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 200px;
+            background: transparent;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            background: var(--fg-color);
+            border: 2px solid var(--bg-color);
+            cursor: pointer;
+            margin-top: -8px;
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            background: var(--dim-color);
+            border: 1px solid var(--fg-color);
+        }
+
+        input[type=range]:focus {
+            outline: none;
+        }
+
+        /* PANEL CONTAINERS */
+        .panel {
+            position: relative;
+            border-right: 1px solid var(--fg-color);
+            border-bottom: 1px solid var(--fg-color);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: var(--bg-color);
+            padding: 2px 5px;
+            border: 1px solid var(--fg-color);
+            font-size: 0.8rem;
+            pointer-events: none;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        /* HUD OVERLAYS */
+        .hud {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            text-align: right;
+            pointer-events: none;
+            font-size: 0.9rem;
+            background: rgba(0,0,0,0.8);
+            padding: 5px;
+            border: 1px dashed var(--dim-color);
+        }
+
+        .scanline {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.3) 50%,
+                rgba(0,0,0,0.3)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        /* SPECIFIC PANEL PLACEMENT */
+        #macro-panel {
+            grid-column: 1;
+        }
+        
+        #micro-panel {
+            grid-column: 1;
+            border-top: 1px solid var(--fg-color);
+        }
+
+        #sim-panel {
+            grid-column: 1;
+        }
+
+        @media (min-width: 1024px) {
+            #macro-panel {
+                grid-column: 1;
+                grid-row: 2;
+                border-bottom: 1px solid var(--fg-color);
+            }
+            #micro-panel {
+                grid-column: 1;
+                grid-row: 3; /* This assumes 2 rows logic, effectively splits left col */
+                height: 50%;
+                position: absolute;
+                bottom: 0;
+                width: 50%;
+                border-top: 2px solid var(--fg-color);
+            }
+            #macro-panel {
+                /* Adjust macro to take top half of left col */
+                height: 50%; 
+                position: absolute;
+                top: 70px; /* offset for header */
+                width: 50%;
+                border-bottom: none;
+            }
+            #sim-panel {
+                grid-column: 2;
+                grid-row: 2 / -1;
+                border-left: 2px solid var(--fg-color);
+            }
+        }
+        
+        /* Simpler flex logic for desktop to avoid absolute positioning mess */
+        @media (min-width: 1024px) {
+            .layout {
+                display: flex;
+                flex-wrap: wrap;
+            }
+            .controls {
+                width: 100%;
+                height: 80px;
+            }
+            .left-col {
+                width: 50%;
+                height: calc(100vh - 80px);
+                display: flex;
+                flex-direction: column;
+            }
+            #macro-panel {
+                flex: 1;
+                width: 100%;
+                position: relative;
+                top: 0; height: auto;
+            }
+            #micro-panel {
+                flex: 1;
+                width: 100%;
+                position: relative;
+                bottom: 0; height: auto;
+                border-top: 2px solid var(--fg-color);
+            }
+            #sim-panel {
+                width: 50%;
+                height: calc(100vh - 80px);
+                border-left: 2px solid var(--fg-color);
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="layout">
+    <!-- TOP CONTROLS -->
+    <div class="controls">
+        <div class="title-block">
+            <h1>Leaky ReLU</h1>
+            <small>f(x) = max(αx, x)</small>
+        </div>
+        <div class="slider-group">
+            <label for="alpha-slider">ALPHA (α): <span id="alpha-val">0.05</span></label>
+            <input type="range" id="alpha-slider" min="0" max="0.20" step="0.01" value="0.05">
+        </div>
+    </div>
+
+    <!-- LEFT COLUMN (GRAPHS) -->
+    <div class="left-col">
+        <!-- MACRO SCOPE -->
+        <div class="panel" id="macro-panel">
+            <div class="panel-header">MACRO SCOPE [1:1]</div>
+            <canvas id="macro-canvas"></canvas>
+            <div class="hud" id="macro-hud">
+                INPUT: 0.00<br>
+                OUTPUT: 0.00
+            </div>
+            <div class="scanline"></div>
+        </div>
+
+        <!-- MICRO SCOPE -->
+        <div class="panel" id="micro-panel">
+            <div class="panel-header">MICRO SCOPE [ZOOM Y: 10x]</div>
+            <canvas id="micro-canvas"></canvas>
+            <div class="hud" id="micro-hud">
+                GRADIENT (dy/dx): 0.05
+            </div>
+            <div class="scanline"></div>
+        </div>
+    </div>
+
+    <!-- RIGHT COLUMN (SIM) -->
+    <div class="panel" id="sim-panel">
+        <div class="panel-header">DATA FLOW SIMULATION</div>
+        <canvas id="sim-canvas"></canvas>
+        <div class="hud" id="sim-hud">
+            FLOW RATE: 5%<br>
+            STATUS: LEAKY
+        </div>
+        <div class="scanline"></div>
+    </div>
+</div>
+
+<script>
+/**
+ * LEAKY RELU VISUALIZER
+ * Ditherpunk Style
+ */
+
+class LeakyReluApp {
+    constructor() {
+        // Elements
+        this.slider = document.getElementById('alpha-slider');
+        this.alphaLabel = document.getElementById('alpha-val');
+        
+        // Canvases
+        this.cMacro = document.getElementById('macro-canvas');
+        this.ctxMacro = this.cMacro.getContext('2d');
+        
+        this.cMicro = document.getElementById('micro-canvas');
+        this.ctxMicro = this.cMicro.getContext('2d');
+        
+        this.cSim = document.getElementById('sim-canvas');
+        this.ctxSim = this.cSim.getContext('2d');
+
+        // HUDs
+        this.hudMacro = document.getElementById('macro-hud');
+        this.hudMicro = document.getElementById('micro-hud');
+        this.hudSim = document.getElementById('sim-hud');
+
+        // State
+        this.alpha = 0.05;
+        this.inputX = -2.0; // Start in negative to show effect immediately
+        this.isDragging = false;
+        
+        // Particle System
+        this.particles = [];
+        this.numParticles = 150;
+
+        // Config
+        this.colors = {
+            bg: '#000000',
+            fg: '#00FF41',
+            dim: '#00330d',
+            grid: '#002205'
+        };
+
+        // Patterns
+        this.initPatterns();
+
+        // Bindings
+        this.resize = this.resize.bind(this);
+        this.loop = this.loop.bind(this);
+        this.handleInput = this.handleInput.bind(this);
+
+        // Init
+        window.addEventListener('resize', this.resize);
+        this.slider.addEventListener('input', (e) => {
+            this.alpha = parseFloat(e.target.value);
+            this.alphaLabel.innerText = this.alpha.toFixed(2);
+        });
+
+        // Input Listeners (Macro Canvas only for input)
+        this.cMacro.addEventListener('mousedown', (e) => { this.isDragging = true; this.handleInput(e); });
+        window.addEventListener('mousemove', (e) => { if(this.isDragging) this.handleInput(e); });
+        window.addEventListener('mouseup', () => this.isDragging = false);
+        
+        this.cMacro.addEventListener('touchstart', (e) => { 
+            this.isDragging = true; 
+            this.handleInput(e.touches[0]); 
+            e.preventDefault(); 
+        }, {passive: false});
+        this.cMacro.addEventListener('touchmove', (e) => { 
+            if(this.isDragging) {
+                this.handleInput(e.touches[0]); 
+                e.preventDefault(); 
+            }
+        }, {passive: false});
+
+        this.resize();
+        this.initParticles();
+        this.loop();
+    }
+
+    initPatterns() {
+        // Create a dither pattern for "filled" areas
+        const pCanvas = document.createElement('canvas');
+        pCanvas.width = 4; pCanvas.height = 4;
+        const pCtx = pCanvas.getContext('2d');
+        pCtx.fillStyle = this.colors.bg;
+        pCtx.fillRect(0,0,4,4);
+        pCtx.fillStyle = this.colors.fg;
+        // Checkerboard
+        pCtx.fillRect(0,0,1,1);
+        pCtx.fillRect(2,2,1,1);
+        this.fillPattern = this.ctxMacro.createPattern(pCanvas, 'repeat');
+
+        // Create a sparse "noise" pattern for the leaky flow
+        const nCanvas = document.createElement('canvas');
+        nCanvas.width = 4; nCanvas.height = 4;
+        const nCtx = nCanvas.getContext('2d');
+        nCtx.fillStyle = this.colors.bg;
+        nCtx.fillRect(0,0,4,4);
+        nCtx.fillStyle = this.colors.fg;
+        nCtx.fillRect(1,1,1,1); // Just one dot
+        this.leakPattern = this.ctxMacro.createPattern(nCanvas, 'repeat');
+    }
+
+    initParticles() {
+        for(let i=0; i<this.numParticles; i++) {
+            this.particles.push({
+                x: Math.random() * this.cSim.width,
+                y: Math.random() * this.cSim.height,
+                size: Math.random() * 2 + 1,
+                offset: Math.random() * 100
+            });
+        }
+    }
+
+    resize() {
+        [this.cMacro, this.cMicro, this.cSim].forEach(c => {
+            const rect = c.parentElement.getBoundingClientRect();
+            // Subtract header height from parent
+            c.width = rect.width;
+            c.height = rect.height - 25; // 25px approx for header
+        });
+        
+        // Re-init patterns because context resets on resize
+        this.initPatterns();
+    }
+
+    handleInput(e) {
+        const rect = this.cMacro.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const w = this.cMacro.width;
+        
+        // Map screen X to graph X (-5 to 5)
+        this.inputX = (x / w) * 10 - 5;
+        // Clamp
+        if(this.inputX < -5) this.inputX = -5;
+        if(this.inputX > 5) this.inputX = 5;
+    }
+
+    // --- MATH ---
+    leakyRelu(x) {
+        return x > 0 ? x : this.alpha * x;
+    }
+
+    map(val, minIn, maxIn, minOut, maxOut) {
+        return (val - minIn) * (maxOut - minOut) / (maxIn - minIn) + minOut;
+    }
+
+    // --- RENDERERS ---
+
+    drawGrid(ctx, w, h, scaleY = 1) {
+        ctx.strokeStyle = this.colors.grid;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        
+        // Center Lines
+        const cx = w / 2;
+        const cy = h / 2;
+
+        // X Axis
+        ctx.moveTo(0, cy); ctx.lineTo(w, cy);
+        // Y Axis
+        ctx.moveTo(cx, 0); ctx.lineTo(cx, h);
+
+        // Grid lines
+        const stepX = w / 10; // 1 unit
+        for(let i=0; i<=w; i+=stepX) {
+            ctx.moveTo(i, 0); ctx.lineTo(i, h);
+        }
+        
+        const stepY = h / (10 * scaleY); 
+        // Logic for scaled grid is tricky, keep simple visual reference
+        if(scaleY === 1) {
+            for(let i=0; i<=h; i+= w/10) { // Keep aspect ratio square
+                ctx.moveTo(0, i); ctx.lineTo(w, i);
+            }
+        } else {
+             // For micro scope, just draw a few horizontal lines
+             for(let i=0; i<=h; i+= h/4) {
+                ctx.moveTo(0, i); ctx.lineTo(w, i);
+             }
+        }
+        
+        ctx.stroke();
+    }
+
+    renderMacro() {
+        const ctx = this.ctxMacro;
+        const w = this.cMacro.width;
+        const h = this.cMacro.height;
+        
+        // Clear
+        ctx.fillStyle = this.colors.bg;
+        ctx.fillRect(0,0,w,h);
+
+        this.drawGrid(ctx, w, h, 1);
+
+        // Draw Function
+        ctx.strokeStyle = this.colors.fg;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        const range = 5; // -5 to 5
+        
+        // Iterate pixels
+        for(let px=0; px<w; px+=2) {
+            const lx = this.map(px, 0, w, -range, range);
+            const ly = this.leakyRelu(lx);
+            
+            // Map logic Y to screen Y
+            // Y range is also approx -5 to 5 (depending on aspect)
+            // But let's fix the visual scale to match X
+            const scaleFactor = w / (range * 2);
+            const py = (h/2) - (ly * scaleFactor);
+            
+            if(px===0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+
+        // Draw Active Point
+        const px = this.map(this.inputX, -range, range, 0, w);
+        const ly = this.leakyRelu(this.inputX);
+        const scaleFactor = w / (range * 2);
+        const py = (h/2) - (ly * scaleFactor);
+
+        ctx.fillStyle = this.colors.bg;
+        ctx.strokeStyle = this.colors.fg;
+        ctx.beginPath();
+        ctx.arc(px, py, 6, 0, Math.PI*2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Drop line
+        ctx.setLineDash([2, 4]);
+        ctx.beginPath();
+        ctx.moveTo(px, h/2);
+        ctx.lineTo(px, py);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Update HUD
+        this.hudMacro.innerHTML = `
+            INPUT: ${this.inputX.toFixed(3)}<br>
+            OUTPUT: ${ly.toFixed(3)}
+        `;
+    }
+
+    renderMicro() {
+        const ctx = this.ctxMicro;
+        const w = this.cMicro.width;
+        const h = this.cMicro.height;
+
+        ctx.fillStyle = this.colors.bg;
+        ctx.fillRect(0,0,w,h);
+
+        this.drawGrid(ctx, w, h, 10);
+
+        // Here we ZOOM in on Y.
+        // X range is still -5 to 5 for context, but Y range is tiny (-0.5 to 0.5)
+        // To visualize the slope.
+        
+        ctx.strokeStyle = this.colors.fg;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+
+        const rangeX = 5;
+        const rangeY = 0.5; // Zoomed range
+        
+        for(let px=0; px<w; px+=2) {
+            const lx = this.map(px, 0, w, -rangeX, rangeX);
+            const ly = this.leakyRelu(lx);
+            
+            // Map logic Y to screen Y (Zoomed)
+            const py = (h/2) - (ly / rangeY * (h/2));
+            
+            // If py is way out of bounds, clamp drawing to avoid rendering artifacts? 
+            // Canvas handles out of bounds ok usually.
+            
+            if(px===0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+
+        // Draw Active Point (Micro)
+        const px = this.map(this.inputX, -rangeX, rangeX, 0, w);
+        const ly = this.leakyRelu(this.inputX);
+        const py = (h/2) - (ly / rangeY * (h/2));
+
+        if(py > 0 && py < h) {
+            ctx.fillStyle = this.colors.fg;
+            ctx.beginPath();
+            ctx.arc(px, py, 4, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        // Gradient Calculation
+        const gradient = this.inputX > 0 ? 1 : this.alpha;
+        
+        this.hudMicro.innerHTML = `
+            GRADIENT (dy/dx): ${gradient.toFixed(2)}
+        `;
+
+        // Visual cue for slope
+        if(this.inputX <= 0) {
+            ctx.fillStyle = this.colors.fg;
+            ctx.fillText(`SLOPE: ${this.alpha}`, 10, h - 20);
+            
+            // Draw a magnified slope triangle
+            if(this.alpha > 0) {
+                const tx = w - 50; const ty = h - 50;
+                ctx.beginPath();
+                ctx.moveTo(tx, ty);
+                ctx.lineTo(tx + 30, ty); // run = 1
+                // rise = alpha (scaled heavily for visual)
+                // Let's just fake the visual triangle to look like the alpha val
+                ctx.lineTo(tx, ty - (this.alpha * 200)); 
+                ctx.stroke();
+            }
+        }
+    }
+
+    renderSim() {
+        const ctx = this.ctxSim;
+        const w = this.cSim.width;
+        const h = this.cSim.height;
+
+        // Trail effect
+        ctx.fillStyle = 'rgba(0,0,0,0.2)'; // Use alpha only for trails, specific exception or use dithering
+        // Stick to dither constraint: erase fully
+        ctx.fillStyle = this.colors.bg;
+        ctx.fillRect(0,0,w,h);
+
+        // Draw Pipe
+        ctx.strokeStyle = this.colors.dim;
+        ctx.lineWidth = 2;
+        const py = h/2;
+        const pHeight = 60;
+        ctx.beginPath();
+        ctx.moveTo(0, py - pHeight/2); ctx.lineTo(w, py - pHeight/2);
+        ctx.moveTo(0, py + pHeight/2); ctx.lineTo(w, py + pHeight/2);
+        ctx.stroke();
+
+        // Determine Speed
+        let speedMult = 0;
+        let flowState = "";
+        
+        if (this.inputX > 0) {
+            speedMult = 1.0; // Max speed
+            flowState = "UNRESTRICTED (100%)";
+            ctx.fillStyle = this.colors.fg; // Solid
+        } else {
+            if (this.alpha === 0) {
+                speedMult = 0;
+                flowState = "BLOCKED (0%) - DYING RELU";
+                ctx.fillStyle = this.colors.dim;
+            } else {
+                speedMult = this.alpha * 2; // Artificial boost to make it visible
+                if(speedMult < 0.05) speedMult = 0.05; // Minimum visible crawl
+                flowState = `LEAKING (${(this.alpha*100).toFixed(0)}%)`;
+                ctx.fillStyle = this.leakPattern; // Dithered
+            }
+        }
+
+        // Render Particles
+        this.particles.forEach(p => {
+            // Move
+            p.x += p.size * speedMult * 2;
+            
+            // Loop
+            if(p.x > w) p.x = -10;
+
+            // Draw based on state
+            if(this.inputX > 0) {
+                // Active: Solid Rects
+                ctx.fillStyle = this.colors.fg;
+                ctx.fillRect(p.x, (py - pHeight/2) + (p.offset % pHeight), p.size, p.size);
+            } else if (this.alpha > 0) {
+                // Leaky: Dithered/Sparse look (simulated by random draw skipping or pixel pattern)
+                // We'll just draw smaller dots
+                ctx.fillStyle = this.colors.fg;
+                if(Math.random() > 0.5) { // Flicker effect for "weak signal"
+                     ctx.fillRect(p.x, (py - pHeight/2) + (p.offset % pHeight), 1, 1);
+                }
+            } else {
+                // Dead: Static dust
+                ctx.fillStyle = this.colors.dim;
+                ctx.fillRect(p.x, (py - pHeight/2) + (p.offset % pHeight), 1, 1);
+            }
+        });
+
+        this.hudSim.innerHTML = `
+            STATUS: ${flowState}<br>
+            SIM SPEED: ${speedMult.toFixed(2)}x
+        `;
+    }
+
+    loop() {
+        this.renderMacro();
+        this.renderMicro();
+        this.renderSim();
+        requestAnimationFrame(this.loop);
+    }
+}
+
+// Start
+document.addEventListener("DOMContentLoaded", () => {
+    new LeakyReluApp();
+});
+
+</script>
+</body>
+</html>

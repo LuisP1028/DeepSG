@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ditherpunk: Sigmoid & Vanishing Gradient</title>
+    <style>
+        /* RESET & LAYOUT */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000000;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            cursor: crosshair;
+        }
+
+        /* CANVAS STYLING */
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            /* Critical for the retro look when scaling up the low-res buffer */
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        /* CRT SCANLINE EFFECT OVERLAY (Optional CSS polish, purely aesthetic) */
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.2) 50%,
+                rgba(0,0,0,0.2)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="scanlines"></div>
+    <canvas id="mainCanvas"></canvas>
+
+<script>
+/**
+ * DITHERPUNK SIGMOID VISUALIZER
+ * -----------------------------
+ * A single-file educational visualization of the Sigmoid Activation Function
+ * and the Vanishing Gradient problem using real-time Atkinson Dithering.
+ * 
+ * Tech Stack: Vanilla JS, HTML5 Canvas.
+ * Technique: Low-res offscreen rendering -> Pixel manipulation -> Upscale.
+ */
+
+// --- CONFIGURATION ---
+const RENDER_WIDTH = 320; // Low resolution width for retro feel & perf
+const PRIMARY_COLOR = { r: 0, g: 255, b: 0 }; // Terminal Green
+const BACKGROUND_COLOR = { r: 0, g: 0, b: 0 }; // Black
+const INPUT_RANGE = 6; // x goes from -6 to +6
+
+// --- STATE MANAGEMENT ---
+const state = {
+    mouseX: 0,
+    mouseY: 0,
+    inputX: 0, // Math value of x (-6 to 6)
+    width: 0,
+    height: 0,
+    isVanishing: false
+};
+
+// --- SETUP ---
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d', { alpha: false }); // Optimize for no transparency
+
+// Offscreen Buffer (The engine room)
+const bufferCanvas = document.createElement('canvas');
+const bCtx = bufferCanvas.getContext('2d', { willReadFrequently: true });
+
+// --- RESIZE HANDLER ---
+function resize() {
+    // Main canvas fills viewport
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // Buffer maintains aspect ratio but at low res
+    state.width = RENDER_WIDTH;
+    state.height = Math.floor(RENDER_WIDTH * (window.innerHeight / window.innerWidth));
+    
+    bufferCanvas.width = state.width;
+    bufferCanvas.height = state.height;
+
+    // Reset Font
+    bCtx.font = "10px monospace";
+    bCtx.textBaseline = "top";
+}
+
+window.addEventListener('resize', resize);
+resize(); // Initial call
+
+// --- INPUT HANDLING ---
+window.addEventListener('mousemove', (e) => {
+    state.mouseX = e.clientX;
+    state.mouseY = e.clientY;
+    
+    // Map screen X to mathematical X range [-6, 6]
+    // We map against the full window width
+    const normX = e.clientX / window.innerWidth;
+    state.inputX = (normX * (INPUT_RANGE * 2)) - INPUT_RANGE;
+});
+
+// --- MATH HELPERS ---
+
+// Sigmoid Function: 1 / (1 + e^-x)
+const sigmoid = (x) => 1 / (1 + Math.exp(-x));
+
+// Sigmoid Derivative: f(x) * (1 - f(x))
+const sigmoidDerivative = (x) => {
+    const sx = sigmoid(x);
+    return sx * (1 - sx);
+};
+
+// Map function
+const map = (val, inMin, inMax, outMin, outMax) => {
+    return (val - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+};
+
+// --- RENDER PIPELINE ---
+
+function update() {
+    // Check for Vanishing Gradient
+    // Typically if |x| > 4, the gradient is extremely small (< 0.017)
+    state.isVanishing = Math.abs(state.inputX) > 4;
+}
+
+function draw() {
+    // 1. CLEAR BUFFER (Use darker grey for 'white' paper logic before dithering)
+    // We draw in grayscale. The dithering algo will convert > threshold to Green.
+    bCtx.fillStyle = '#000000';
+    bCtx.fillRect(0, 0, state.width, state.height);
+    
+    const w = state.width;
+    const h = state.height;
+    const halfH = h / 2;
+
+    // --- SHARED DRAWING SETTINGS ---
+    bCtx.lineWidth = 1;
+    bCtx.strokeStyle = '#999999'; // High gray for visibility before dither
+
+    // --- TOP PANEL: SIGMOID ---
+    // Y-Axis Range: -0.2 to 1.2 (to show bounds)
+    const topYMin = -0.2;
+    const topYMax = 1.2;
+    const topH = halfH; // Height of top panel
+
+    // Draw Unreachable Zone (Below y=0)
+    const zeroY_Screen = map(0, topYMin, topYMax, topH, 0);
+    
+    // Pattern for unreachable area
+    bCtx.fillStyle = '#222222'; // Dark grey will dither to sparse dots
+    bCtx.fillRect(0, zeroY_Screen, w, topH - zeroY_Screen);
+    
+    // Draw Axis Lines (y=0, y=1)
+    bCtx.setLineDash([2, 2]);
+    bCtx.beginPath();
+    // y=1
+    const oneY_Screen = map(1, topYMin, topYMax, topH, 0);
+    bCtx.moveTo(0, oneY_Screen); bCtx.lineTo(w, oneY_Screen);
+    // y=0
+    bCtx.moveTo(0, zeroY_Screen); bCtx.lineTo(w, zeroY_Screen);
+    bCtx.stroke();
+    bCtx.setLineDash([]);
+
+    // Draw Sigmoid Curve
+    bCtx.strokeStyle = '#FFFFFF'; // Full White
+    bCtx.beginPath();
+    for (let i = 0; i < w; i++) {
+        const mathX = map(i, 0, w, -INPUT_RANGE, INPUT_RANGE);
+        const mathY = sigmoid(mathX);
+        const screenY = map(mathY, topYMin, topYMax, topH, 0);
+        if (i === 0) bCtx.moveTo(i, screenY);
+        else bCtx.lineTo(i, screenY);
+    }
+    bCtx.stroke();
+
+    // Draw Active Bead (Top)
+    const activeMathY = sigmoid(state.inputX);
+    const activeScreenX = map(state.inputX, -INPUT_RANGE, INPUT_RANGE, 0, w);
+    const activeScreenY = map(activeMathY, topYMin, topYMax, topH, 0);
+    const gradVal = sigmoidDerivative(state.inputX);
+
+    // Tangent Line
+    // Slope m = gradVal. y - y1 = m(x - x1)
+    // Draw a small segment
+    const tanLen = 40; // pixels width approx
+    const m = gradVal; // Slope in math space? 
+    // Easier visual approximation: just rotate context or calculate points
+    // Visual Slope estimation:
+    // We need deltaY pixels per deltaX pixels
+    // 1 unit X = w / 12 pixels. 1 unit Y = topH / 1.4 pixels.
+    // slope_screen = m * (pixelsPerUnitY / pixelsPerUnitX)
+    const pxPerUnitX = w / (INPUT_RANGE * 2);
+    const pxPerUnitY = topH / (topYMax - topYMin);
+    const screenSlope = -m * (pxPerUnitY / pxPerUnitX); // Negative because canvas Y is inverted
+
+    bCtx.save();
+    bCtx.translate(activeScreenX, activeScreenY);
+    bCtx.beginPath();
+    bCtx.moveTo(-20, -20 * screenSlope);
+    bCtx.lineTo(20, 20 * screenSlope);
+    bCtx.strokeStyle = '#AAAAAA';
+    bCtx.stroke();
+    bCtx.restore();
+
+    // Bead
+    bCtx.fillStyle = '#FFFFFF';
+    bCtx.fillRect(activeScreenX - 3, activeScreenY - 3, 6, 6);
+
+    // Labels
+    bCtx.fillStyle = '#FFFFFF';
+    bCtx.fillText("SIGMOID ACTIVATION σ(x)", 4, 4);
+    if(activeMathY < 0.1) {
+       bCtx.fillText("UNREACHABLE (Not Zero-Centered)", 4, zeroY_Screen + 4); 
+    }
+
+    // --- BOTTOM PANEL: DERIVATIVE ---
+    const botYMin = 0;
+    const botYMax = 0.3; // Max derivative of sigmoid is 0.25
+    const botTop = halfH;
+    
+    // Draw Separator
+    bCtx.beginPath();
+    bCtx.moveTo(0, botTop); bCtx.lineTo(w, botTop);
+    bCtx.strokeStyle = '#FFFFFF';
+    bCtx.stroke();
+
+    // Draw Derivative Curve
+    bCtx.beginPath();
+    for (let i = 0; i < w; i++) {
+        const mathX = map(i, 0, w, -INPUT_RANGE, INPUT_RANGE);
+        const mathY = sigmoidDerivative(mathX);
+        // Map to bottom half
+        const screenY = map(mathY, botYMin, botYMax, h, botTop);
+        if (i === 0) bCtx.moveTo(i, screenY);
+        else bCtx.lineTo(i, screenY);
+    }
+    bCtx.stroke();
+
+    // Draw Active Bead (Bottom)
+    const derivY = sigmoidDerivative(state.inputX);
+    const derivScreenY = map(derivY, botYMin, botYMax, h, botTop);
+    
+    bCtx.fillStyle = '#FFFFFF';
+    bCtx.fillRect(activeScreenX - 3, derivScreenY - 3, 6, 6);
+    
+    // Vertical Guide connecting beads
+    bCtx.setLineDash([1, 2]);
+    bCtx.strokeStyle = '#666666';
+    bCtx.beginPath();
+    bCtx.moveTo(activeScreenX, activeScreenY + 3);
+    bCtx.lineTo(activeScreenX, derivScreenY - 3);
+    bCtx.stroke();
+    bCtx.setLineDash([]);
+
+    // Labels
+    bCtx.fillStyle = '#FFFFFF';
+    bCtx.fillText("GRADIENT MAGNITUDE σ'(x)", 4, botTop + 4);
+
+    // --- HUD & ALERTS ---
+    
+    // Values Panel
+    const hudY = h - 35;
+    bCtx.fillStyle = '#000000';
+    bCtx.fillRect(w - 100, hudY, 100, 35); // Background for text
+    bCtx.strokeStyle = '#FFFFFF';
+    bCtx.strokeRect(w - 100, hudY, 100, 35);
+    
+    bCtx.fillStyle = '#FFFFFF';
+    bCtx.textAlign = 'right';
+    bCtx.fillText(`x: ${state.inputX.toFixed(2)}`, w - 4, hudY + 4);
+    bCtx.fillText(`σ(x): ${activeMathY.toFixed(3)}`, w - 4, hudY + 14);
+    bCtx.fillText(`σ'(x): ${derivY.toFixed(3)}`, w - 4, hudY + 24);
+    bCtx.textAlign = 'left'; // Reset
+
+    // Vanishing Gradient Warning
+    if (state.isVanishing) {
+        // Flash effect
+        if (Math.floor(Date.now() / 200) % 2 === 0) {
+            bCtx.fillStyle = '#FFFFFF';
+            bCtx.fillRect(0, halfH - 15, w, 30);
+            bCtx.fillStyle = '#000000';
+            bCtx.textAlign = 'center';
+            bCtx.fillText("WARNING: VANISHING GRADIENT", w/2, halfH - 10);
+            bCtx.fillText("WEIGHT UPDATES STALLED", w/2, halfH + 2);
+            bCtx.textAlign = 'left';
+        }
+    }
+}
+
+// --- ATKINSON DITHERING ALGORITHM ---
+function applyDither() {
+    // 1. Get pixel data from the offscreen buffer
+    const imgData = bCtx.getImageData(0, 0, state.width, state.height);
+    const data = imgData.data;
+    const w = state.width;
+    const h = state.height;
+
+    // 2. Iterate over every pixel
+    // Since we drew in grayscale, R=G=B. We use one channel (Red) for intensity.
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const i = (y * w + x) * 4;
+            const oldPixel = data[i]; // Grayscale value (0-255)
+            
+            // Quantize: Determine closest binary color (0 or 255)
+            // 128 is the standard mid-point threshold
+            const newPixel = oldPixel < 128 ? 0 : 255;
+            
+            // Calculate quantization error
+            const error = oldPixel - newPixel;
+
+            // Set the current pixel to the final color
+            // If newPixel is 255 (On), we set it to our Terminal Green
+            // If newPixel is 0 (Off), we set it to Black
+            if (newPixel === 255) {
+                data[i]     = PRIMARY_COLOR.r;
+                data[i + 1] = PRIMARY_COLOR.g;
+                data[i + 2] = PRIMARY_COLOR.b;
+            } else {
+                data[i]     = BACKGROUND_COLOR.r;
+                data[i + 1] = BACKGROUND_COLOR.g;
+                data[i + 2] = BACKGROUND_COLOR.b;
+            }
+            // Alpha always 255
+            data[i + 3] = 255;
+
+            // 3. Diffuse the Error (Atkinson Kernel)
+            //       X   1   1
+            //   1   1   1
+            //       1
+            // (Divisor is 8)
+
+            if (error !== 0) {
+                const distribute = (dx, dy) => {
+                    if (x + dx >= 0 && x + dx < w && y + dy >= 0 && y + dy < h) {
+                        const ni = ((y + dy) * w + (x + dx)) * 4;
+                        // We only update the 'Red' channel for calculation purposes, 
+                        // as upcoming iterations will read from it.
+                        // We assume grayscale input logic persists.
+                        data[ni] += error >> 3; // Bit shift divide by 8
+                        // data[ni+1] and data[ni+2] don't matter for input reading 
+                        // because we only read data[i] (Red) at the start of the loop
+                    }
+                };
+
+                distribute(1, 0);  // Right
+                distribute(2, 0);  // Right+1
+                distribute(-1, 1); // Down-Left
+                distribute(0, 1);  // Down
+                distribute(1, 1);  // Down-Right
+                distribute(0, 2);  // Down+1
+            }
+        }
+    }
+
+    // 4. Put the dithered data back
+    bCtx.putImageData(imgData, 0, 0);
+}
+
+// --- MAIN LOOP ---
+function loop() {
+    update();
+    draw();        // Draw shapes in grayscale to buffer
+    applyDither(); // Manipulate pixels in buffer
+    
+    // Render buffer to main screen
+    // We disable smoothing on the context to ensure hard pixels
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bufferCanvas, 0, 0, canvas.width, canvas.height);
+
+    requestAnimationFrame(loop);
+}
+
+// Start
+loop();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DenseNet Ditherpunk Visualizer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        :root {
+            --bg-color: #000000;
+            --fg-color: #33FF33; /* Terminal Green */
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            color: var(--fg-color);
+            font-family: 'VT323', monospace;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* UI LAYOUT */
+        #ui-top {
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid var(--fg-color);
+            padding: 0 20px;
+            font-size: 1.2rem;
+            z-index: 10;
+            background: var(--bg-color);
+            text-transform: uppercase;
+        }
+
+        .step { opacity: 0.3; transition: opacity 0.3s; }
+        .step.active { opacity: 1; text-shadow: 0 0 5px var(--fg-color); font-weight: bold; }
+
+        #canvas-wrapper {
+            flex-grow: 1;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #050505;
+            overflow: hidden;
+        }
+
+        /* The canvas is rendered small (low res) then scaled up with crisp edges */
+        canvas {
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Scanline Overlay */
+        #scanlines {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(
+                to bottom,
+                rgba(0, 0, 0, 0) 50%,
+                rgba(0, 0, 0, 0.25) 50%
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        #ui-bottom {
+            height: 80px;
+            border-top: 2px solid var(--fg-color);
+            padding: 15px;
+            font-size: 1.4rem;
+            background: var(--bg-color);
+            z-index: 10;
+            display: flex;
+            align-items: center;
+        }
+
+        #typewriter {
+            border-right: 10px solid var(--fg-color);
+            white-space: pre-wrap;
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink { 50% { border-color: transparent; } }
+    </style>
+</head>
+<body>
+
+    <div id="ui-top">
+        <span>DenseNet_Visualizer_v1.0</span>
+        <div id="steps">
+            <span id="s1" class="step">[1. ADD vs CONCAT]</span>
+            <span id="s2" class="step">[2. GROWTH RATE]</span>
+            <span id="s3" class="step">[3. FEATURE REUSE]</span>
+        </div>
+    </div>
+
+    <div id="canvas-wrapper">
+        <canvas id="mainCanvas"></canvas>
+        <div id="scanlines"></div>
+    </div>
+
+    <div id="ui-bottom">
+        <span id="typewriter">Initializing...</span>
+    </div>
+
+    <script>
+        /**
+         * ENGINE SETUP
+         */
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        
+        // Low internal resolution for retro feel + performance
+        const RES_X = 320;
+        const RES_Y = 240;
+        canvas.width = RES_X;
+        canvas.height = RES_Y;
+
+        // Buffer canvas for pre-dither drawing
+        const buffer = document.createElement('canvas');
+        buffer.width = RES_X;
+        buffer.height = RES_Y;
+        const bctx = buffer.getContext('2d');
+
+        // State
+        let sceneIndex = 0;
+        let frameCount = 0;
+        const SCENE_DURATION = 400; // frames per scene
+
+        const sceneConfig = [
+            { id: 1, text: "COMPARISON: ResNet blends features (Add). DenseNet stacks them (Concat)." },
+            { id: 2, text: "GROWTH: Input passes through layers. New features snap to the back. The history grows." },
+            { id: 3, text: "REUSE: Layer 10 accesses Layer 1 directly. Gradients flow backwards effortlessly." }
+        ];
+
+        /**
+         * PATTERN GENERATOR (Textures for Blocks)
+         * We need distinct patterns because we only have 1 color.
+         */
+        function createPattern(type) {
+            const pCan = document.createElement('canvas');
+            pCan.width = 8; pCan.height = 8;
+            const pCtx = pCan.getContext('2d');
+            pCtx.fillStyle = '#FFFFFF';
+            pCtx.fillRect(0,0,8,8); // White bg (draw black on top)
+            pCtx.fillStyle = '#000000';
+
+            if (type === 'grid') { // Input
+                pCtx.fillRect(0,0,8,1);
+                pCtx.fillRect(0,0,1,8);
+            } else if (type === 'stripes_v') { // Feature A
+                pCtx.fillRect(0,0,2,8);
+                pCtx.fillRect(4,0,2,8);
+            } else if (type === 'stripes_h') { // Feature B
+                pCtx.fillRect(0,0,8,2);
+                pCtx.fillRect(0,4,8,2);
+            } else if (type === 'check') { // Feature C
+                pCtx.fillRect(0,0,4,4);
+                pCtx.fillRect(4,4,4,4);
+            } else if (type === 'solid') { // Solid (High intensity)
+                // Leave white
+            } else if (type === 'noise') {
+                for(let i=0; i<32; i++) pCtx.fillRect(Math.random()*8, Math.random()*8, 1, 1);
+            }
+
+            return bctx.createPattern(pCan, 'repeat');
+        }
+
+        const patterns = {
+            input: createPattern('grid'),
+            feat1: createPattern('stripes_v'),
+            feat2: createPattern('stripes_h'),
+            feat3: createPattern('check'),
+            noise: createPattern('noise'),
+            solid: createPattern('solid')
+        };
+
+        /**
+         * ISOMETRIC DRAWING HELPERS
+         * Simple 2.5D projection: x = x, y = y - z*0.5
+         */
+        function drawIsoBlock(x, y, w, h, thickness, pattern, color = '#FFF', stroke = '#000') {
+            // Front Face
+            bctx.fillStyle = pattern;
+            bctx.fillRect(x, y, w, h);
+            bctx.lineWidth = 1;
+            bctx.strokeStyle = stroke;
+            bctx.strokeRect(x, y, w, h);
+
+            // Side Face (Thickness)
+            if (thickness > 0) {
+                bctx.fillStyle = '#888'; // Dimmer for side
+                bctx.beginPath();
+                bctx.moveTo(x + w, y);
+                bctx.lineTo(x + w + thickness, y - (thickness/2));
+                bctx.lineTo(x + w + thickness, y + h - (thickness/2));
+                bctx.lineTo(x + w, y + h);
+                bctx.fill();
+                bctx.stroke();
+
+                // Top Face
+                bctx.fillStyle = '#BBB'; // Medium for top
+                bctx.beginPath();
+                bctx.moveTo(x, y);
+                bctx.lineTo(x + thickness, y - (thickness/2));
+                bctx.lineTo(x + w + thickness, y - (thickness/2));
+                bctx.lineTo(x + w, y);
+                bctx.fill();
+                bctx.stroke();
+            }
+        }
+
+        // Helper to draw a "Pack" of concatenated features
+        function drawDensePack(x, y, h, slices) {
+            let currentThick = 0;
+            const sliceWidth = 10; // Visual depth of one slice
+            
+            // We draw back to front so overlap works, 
+            // BUT in isometric, back is top-right. 
+            // For simple stacking representation:
+            
+            // Let's draw them side-by-side physically 2D but with iso depth
+            let startX = x;
+            
+            slices.forEach((slice, i) => {
+                // Shake effect if active
+                let dx = 0; let dy = 0;
+                if(slice.active) {
+                    dx = (Math.random() - 0.5) * 2;
+                    dy = (Math.random() - 0.5) * 2;
+                    bctx.shadowColor = "white";
+                    bctx.shadowBlur = 10;
+                } else {
+                    bctx.shadowBlur = 0;
+                }
+
+                drawIsoBlock(startX + dx, y + dy, 20, h, 10, slice.pat);
+                
+                // Connector line
+                if (i < slices.length - 1) {
+                    bctx.fillStyle = "#FFF";
+                    bctx.fillRect(startX + 20, y + h/2 - 2, 4, 4); // "Staple"
+                }
+
+                startX += 24; // Width + Gap
+            });
+            bctx.shadowBlur = 0;
+        }
+
+        /**
+         * SCENE RENDERERS
+         */
+
+        // SCENE 1: Comparison
+        function drawScene1(t) {
+            let p = (t % SCENE_DURATION) / SCENE_DURATION;
+            
+            // Labels
+            bctx.font = "16px monospace";
+            bctx.fillStyle = "#FFF";
+            bctx.fillText("RESNET (ADD)", 40, 40);
+            bctx.fillText("DENSENET (CONCAT)", 40, 140);
+
+            // --- RESNET (Addition) ---
+            let ax = 40 + (p * 100);
+            let bx = 160 - (p * 100);
+            if (p > 0.5) { ax = 100; bx = 100; } // Stop at merge
+
+            // Block A
+            if (p <= 0.5) drawIsoBlock(ax, 60, 30, 30, 10, patterns.feat1);
+            // Block B
+            if (p <= 0.5) drawIsoBlock(bx, 60, 30, 30, 10, patterns.feat2);
+
+            // Merged Result
+            if (p > 0.5) {
+                // Flashing mix
+                let pat = (Math.floor(t / 5) % 2 === 0) ? patterns.feat1 : patterns.feat2;
+                if (p > 0.6) pat = patterns.noise; // Eventually becomes noise/mix
+                drawIsoBlock(100, 60, 30, 30, 10, pat);
+                
+                bctx.fillStyle = "#FFF";
+                bctx.fillText("HISTORY LOST", 150, 80);
+            }
+
+
+            // --- DENSENET (Concatenation) ---
+            let cx = 40 + (p * 100); // Target 90
+            let dx = 160 - (p * 100); // Target 120 (adjacent)
+            
+            if (p > 0.5) { cx = 85; dx = 115; }
+
+            // Block C
+            drawIsoBlock(cx, 160, 30, 30, 10, patterns.feat1);
+            // Block D
+            drawIsoBlock(dx, 160, 30, 30, 10, patterns.feat2);
+
+            if (p > 0.5) {
+                // Draw connector
+                bctx.fillStyle = "#FFF";
+                bctx.fillRect(113, 175, 4, 6); // Clamp
+                bctx.fillText("HISTORY KEPT", 160, 180);
+            }
+        }
+
+        // SCENE 2: The Snowball (Accumulation)
+        function drawScene2(t) {
+            // Pipeline metaphor: Camera moves right, or blocks move left
+            // We build the stack over time.
+            
+            let phase = Math.floor(t / 100); // 0, 1, 2, 3
+            let subT = (t % 100) / 100;
+
+            let baseY = 100;
+            let startX = 50;
+
+            // Draw Arrows
+            bctx.fillStyle = "#FFF";
+            bctx.fillText("LAYER " + (phase+1), 10, 20);
+
+            let stack = [];
+            // Input
+            stack.push({pat: patterns.input, active: false});
+            
+            if (phase >= 1) stack.push({pat: patterns.feat1, active: (phase===1 && subT < 0.2)});
+            if (phase >= 2) stack.push({pat: patterns.feat2, active: (phase===2 && subT < 0.2)});
+            if (phase >= 3) stack.push({pat: patterns.feat3, active: (phase===3 && subT < 0.2)});
+
+            // Draw Processing Nodes
+            bctx.strokeStyle = "#AAA";
+            bctx.beginPath();
+            bctx.moveTo(0, 130); bctx.lineTo(320, 130); // Rail
+            bctx.stroke();
+
+            // Draw the growing stack
+            // Animate position slightly based on subT
+            let xPos = startX + (subT * 20); 
+            if (phase === 3) xPos = startX;
+
+            drawDensePack(xPos, 80, 40, stack);
+
+            // Draw "New Feature" being created
+            if (phase < 3) {
+                let arcX = xPos + (stack.length * 24) + 30;
+                bctx.strokeRect(arcX, 90, 20, 20); // Processor Node
+                bctx.fillText("OP", arcX+2, 105);
+
+                // Feature flying back
+                if (subT > 0.5) {
+                    let flyX = arcX - ((subT - 0.5) * 2 * 50); // Fly left towards stack
+                    let flyPat = (phase === 0) ? patterns.feat1 : (phase === 1) ? patterns.feat2 : patterns.feat3;
+                    drawIsoBlock(flyX, 80, 20, 40, 5, flyPat);
+                }
+            }
+        }
+
+        // SCENE 3: Reuse & Backprop
+        function drawScene3(t) {
+            let cx = 80;
+            let cy = 80;
+            
+            // A thick stack (Layer 10)
+            let slices = [
+                {pat: patterns.input, active: false},
+                {pat: patterns.feat1, active: true}, // The target feature
+                {pat: patterns.feat2, active: false},
+                {pat: patterns.feat3, active: false},
+                {pat: patterns.feat1, active: false},
+                {pat: patterns.noise, active: false}
+            ];
+
+            // Pulse the active slice
+            let pulse = Math.sin(t * 0.2);
+            if (pulse > 0.5) slices[1].pat = patterns.solid; // Glow white
+            else slices[1].pat = patterns.feat1;
+
+            drawDensePack(cx, cy, 60, slices);
+
+            // Draw Output Node
+            bctx.strokeRect(260, cy + 20, 30, 30);
+            bctx.fillText("OUT", 263, cy + 40);
+
+            // Connection Lines
+            bctx.strokeStyle = "#555";
+            bctx.beginPath();
+            bctx.moveTo(cx + (6*24), cy + 30);
+            bctx.lineTo(260, cy + 35);
+            bctx.stroke();
+
+            // BACKPROP PARTICLES
+            // They travel from OUT back to the stack
+            // Highlighting the "Deep Supervision" path
+            
+            let pOffset = (t * 5) % 200;
+            let px = 260 - pOffset;
+            
+            // Path logic
+            if (px > (cx + 24 + 10)) {
+                // Main bus
+                bctx.fillStyle = "#FFF";
+                bctx.fillRect(px, cy + 35, 4, 4);
+            } else if (px > (cx + 24)) {
+                // Snap to specific slice (Slice index 1 is approx at cx + 24)
+                // Draw particle hovering over that specific slice
+                bctx.fillRect(cx + 24 + 10, cy + 10, 4, 4);
+                
+                bctx.strokeStyle = "#FFF";
+                bctx.beginPath();
+                bctx.moveTo(cx + 24 + 10, cy + 30);
+                bctx.lineTo(cx + 24 + 10, cy); // Arrow down to slice
+                bctx.stroke();
+            }
+
+            // Text Label pointing to slice
+            bctx.fillStyle = "#FFF";
+            bctx.fillText("LAYER 1 FEATURES", cx, cy - 20);
+            bctx.beginPath();
+            bctx.moveTo(cx + 30, cy - 15);
+            bctx.lineTo(cx + 35, cy);
+            bctx.stroke();
+        }
+
+        /**
+         * DITHERING ENGINE (Atkinson)
+         */
+        function applyDither() {
+            // Get raw pixel data from buffer
+            const imageData = bctx.getImageData(0, 0, RES_X, RES_Y);
+            const data = imageData.data;
+            const w = RES_X;
+            const h = RES_Y;
+
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const i = (y * w + x) * 4;
+                    
+                    // Convert to grayscale
+                    const oldPixel = (data[i] + data[i+1] + data[i+2]) / 3;
+                    
+                    // Threshold (1-bit)
+                    const newPixel = oldPixel < 128 ? 0 : 255;
+                    const error = Math.floor((oldPixel - newPixel) / 8);
+
+                    // Color Mapping: 0 -> Black, 255 -> Green
+                    data[i] = 0;   // R
+                    data[i+1] = newPixel; // G
+                    data[i+2] = 0; // B
+                    // Alpha is untouched
+
+                    if (error === 0) continue;
+
+                    // Atkinson Error Distribution
+                    //       X   1   1
+                    //   1   1   1
+                    //       1
+
+                    const neighbors = [
+                        [1, 0], [2, 0],
+                        [-1, 1], [0, 1], [1, 1],
+                        [0, 2]
+                    ];
+
+                    for (let n of neighbors) {
+                        const nx = x + n[0];
+                        const ny = y + n[1];
+                        if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                            const ni = (ny * w + nx) * 4;
+                            data[ni] += error;
+                            data[ni+1] += error;
+                            data[ni+2] += error;
+                        }
+                    }
+                }
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        /**
+         * MAIN LOOP
+         */
+        const uiText = document.getElementById('typewriter');
+        const steps = [
+            document.getElementById('s1'),
+            document.getElementById('s2'),
+            document.getElementById('s3')
+        ];
+
+        function loop() {
+            frameCount++;
+
+            // Manage Scenes
+            if (frameCount > SCENE_DURATION) {
+                frameCount = 0;
+                sceneIndex = (sceneIndex + 1) % 3;
+            }
+
+            // Update UI
+            if (uiText.innerText !== sceneConfig[sceneIndex].text) {
+                uiText.innerText = sceneConfig[sceneIndex].text;
+            }
+            steps.forEach((s, i) => {
+                if (i === sceneIndex) s.classList.add('active');
+                else s.classList.remove('active');
+            });
+
+            // Clear Buffer
+            bctx.fillStyle = '#000';
+            bctx.fillRect(0, 0, RES_X, RES_Y);
+
+            // Render active scene to buffer
+            if (sceneIndex === 0) drawScene1(frameCount);
+            if (sceneIndex === 1) drawScene2(frameCount);
+            if (sceneIndex === 2) drawScene3(frameCount);
+
+            // Post-Process
+            applyDither();
+
+            requestAnimationFrame(loop);
+        }
+
+        // Start
+        loop();
+
+    </script>
+</body>
+</html>

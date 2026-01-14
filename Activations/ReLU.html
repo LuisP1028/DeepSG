@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReLU Visualizer // Ditherpunk</title>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --fg-color: #00FF41;
+            --grid-color: #003300;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--fg-color);
+            font-family: 'Courier New', Courier, monospace;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* LAYOUT */
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+        }
+
+        @media (min-width: 768px) {
+            .container {
+                flex-direction: row;
+            }
+        }
+
+        /* CANVAS SECTION */
+        #canvas-wrapper {
+            flex: 2;
+            position: relative;
+            border-bottom: 2px solid var(--fg-color);
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        @media (min-width: 768px) {
+            #canvas-wrapper {
+                border-bottom: none;
+                border-right: 2px solid var(--fg-color);
+            }
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* DATA PANEL SECTION */
+        #data-panel {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            background-color: var(--bg-color);
+            transition: background-color 0.1s, color 0.1s;
+        }
+
+        /* Inverted State for Dying ReLU */
+        #data-panel.alert {
+            background-color: var(--fg-color);
+            color: var(--bg-color);
+        }
+        
+        #data-panel.alert h1, 
+        #data-panel.alert .value,
+        #data-panel.alert .label {
+            color: var(--bg-color);
+            border-color: var(--bg-color);
+        }
+
+        .header {
+            border-bottom: 1px dashed var(--fg-color);
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            font-size: 1.4rem;
+            text-transform: uppercase;
+        }
+
+        .readout-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .data-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .label {
+            font-size: 0.8rem;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .value {
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        /* HISTORY BAR */
+        #history-container {
+            margin-top: auto;
+        }
+        
+        .history-label {
+            font-size: 0.7rem;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        #history-canvas {
+            width: 100%;
+            height: 30px;
+            border: 1px solid var(--fg-color);
+            image-rendering: pixelated;
+        }
+        
+        #data-panel.alert #history-canvas {
+            border: 1px solid var(--bg-color);
+        }
+
+        #alert-box {
+            height: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            text-align: center;
+            margin-top: 10px;
+            visibility: hidden;
+        }
+
+        #data-panel.alert #alert-box {
+            visibility: visible;
+        }
+
+        /* Scanline Overlay */
+        .scanline {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(
+                to bottom, 
+                rgba(255,255,255,0), 
+                rgba(255,255,255,0) 50%, 
+                rgba(0,0,0,0.2) 50%, 
+                rgba(0,0,0,0.2)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            opacity: 0.2;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="canvas-wrapper">
+        <canvas id="main-canvas"></canvas>
+        <div class="scanline"></div>
+    </div>
+
+    <div id="data-panel">
+        <div>
+            <div class="header">
+                <h1>ReLU Unit_01</h1>
+                <small>f(x) = max(0, x)</small>
+            </div>
+
+            <div class="readout-grid">
+                <div class="data-item">
+                    <span class="label">INPUT [x]</span>
+                    <span class="value" id="val-x">0.00</span>
+                </div>
+                <div class="data-item">
+                    <span class="label">OUTPUT [y]</span>
+                    <span class="value" id="val-y">0.00</span>
+                </div>
+                <div class="data-item">
+                    <span class="label">GRADIENT</span>
+                    <span class="value" id="val-grad">0</span>
+                </div>
+                <div class="data-item">
+                    <span class="label">STATUS</span>
+                    <span class="value" id="val-status">INACTIVE</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="history-container">
+            <div class="history-label">
+                <span>ACTIVITY HISTORY (BUFFER)</span>
+                <span id="dead-counter">DEAD: 0%</span>
+            </div>
+            <canvas id="history-canvas"></canvas>
+            <div id="alert-box">⚠ WARNING: DYING RELU DETECTED</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    /*
+     * DITHERPUNK RELU VISUALIZER
+     * 1-bit logic, procedural textures, particle systems.
+     */
+
+    // --- DOM ELEMENTS ---
+    const canvas = document.getElementById('main-canvas');
+    const ctx = canvas.getContext('2d');
+    const historyCanvas = document.getElementById('history-canvas');
+    const hCtx = historyCanvas.getContext('2d');
+    const panel = document.getElementById('data-panel');
+    const wrapper = document.getElementById('canvas-wrapper');
+    
+    // UI Refs
+    const ui = {
+        x: document.getElementById('val-x'),
+        y: document.getElementById('val-y'),
+        grad: document.getElementById('val-grad'),
+        status: document.getElementById('val-status'),
+        counter: document.getElementById('dead-counter')
+    };
+
+    // --- CONFIG & STATE ---
+    const CFG = {
+        minX: -5, maxX: 5,
+        minY: -1, maxY: 5,
+        fg: '#00FF41',
+        bg: '#000000',
+        grid: '#003300'
+    };
+
+    let state = {
+        x: 0, // Current Input
+        w: 0, h: 0, // Canvas dims
+        dragging: false,
+        history: new Array(100).fill(1), // 1=active, 0=dead
+        deadCount: 0
+    };
+
+    // Particle System
+    const particles = [];
+    const MAX_PARTICLES = 100;
+
+    // --- UTILS: DITHER PATTERNS ---
+    
+    // Create a checkered pattern (2x2)
+    function createCheckPattern(color1, color2) {
+        const c = document.createElement('canvas');
+        c.width = 2; c.height = 2;
+        const cx = c.getContext('2d');
+        cx.fillStyle = color1;
+        cx.fillRect(0,0,2,2);
+        cx.fillStyle = color2;
+        cx.fillRect(0,0,1,1);
+        cx.fillRect(1,1,1,1);
+        return ctx.createPattern(c, 'repeat');
+    }
+    
+    // Create a striped pattern for the graph fill
+    function createStripePattern() {
+        const c = document.createElement('canvas');
+        c.width = 4; c.height = 4;
+        const cx = c.getContext('2d');
+        cx.fillStyle = CFG.bg;
+        cx.fillRect(0,0,4,4);
+        cx.fillStyle = CFG.fg;
+        // Diagonal line
+        cx.moveTo(0,4); cx.lineTo(4,0);
+        cx.stroke();
+        return ctx.createPattern(c, 'repeat');
+    }
+
+    const patternCheck = createCheckPattern(CFG.bg, CFG.fg);
+    const patternFill = createStripePattern();
+
+    // --- MATH & MAPPING ---
+
+    function relu(x) { return Math.max(0, x); }
+    function gradient(x) { return x > 0 ? 1 : 0; }
+
+    function mapX(x) {
+        // Map graph X to Screen X (Left half of screen)
+        // We split screen: Left 50% = Graph, Right 50% = Neuron Sim
+        const graphWidth = state.w * 0.55; 
+        return (x - CFG.minX) / (CFG.maxX - CFG.minX) * graphWidth;
+    }
+
+    function mapY(y) {
+        // Standard Y mapping
+        return state.h - ((y - CFG.minY) / (CFG.maxY - CFG.minY) * state.h);
+    }
+
+    function unmapX(screenX) {
+        const graphWidth = state.w * 0.55;
+        // Clamp to graph area
+        const clampS = Math.min(screenX, graphWidth);
+        return (clampS / graphWidth) * (CFG.maxX - CFG.minX) + CFG.minX;
+    }
+
+    // --- LOGIC: DYING RELU ---
+
+    function updateHistory() {
+        // Push 0 if dead (x <= 0), 1 if active
+        const status = state.x > 0 ? 1 : 0;
+        state.history.shift();
+        state.history.push(status);
+
+        // Calculate % dead
+        const deads = state.history.filter(v => v === 0).length;
+        state.deadCount = deads;
+        
+        ui.counter.innerText = `DEAD: ${deads}%`;
+
+        // Draw History Bar
+        const w = historyCanvas.width;
+        const h = historyCanvas.height;
+        const barW = w / 100;
+        
+        hCtx.clearRect(0, 0, w, h);
+        
+        // If Alert mode, invert drawing colors
+        const isAlert = deads > 80;
+        const fillActive = isAlert ? CFG.bg : CFG.fg;
+        const fillDead = isAlert ? '#333' : '#333'; // Dim pixels for dead history
+
+        state.history.forEach((val, i) => {
+            hCtx.fillStyle = val === 1 ? fillActive : fillDead;
+            if (val === 1) {
+                hCtx.fillRect(i * barW, 0, barW, h);
+            } else {
+                // Draw a small dot for dead frames
+                hCtx.fillRect(i * barW, h/2 - 1, barW, 2);
+            }
+        });
+
+        // Trigger Alert UI
+        if (isAlert) {
+            panel.classList.add('alert');
+        } else {
+            panel.classList.remove('alert');
+        }
+    }
+
+    // --- PARTICLES ---
+
+    function spawnParticle() {
+        // Particles start at the "input" of the neuron (middle of screen)
+        const neuronX = state.w * 0.75;
+        const startX = state.w * 0.55; // End of graph
+        
+        particles.push({
+            x: startX,
+            y: state.h / 2 + (Math.random() * 20 - 10), // Jitter Y
+            size: 2 + Math.random() * 2,
+            speed: 2 + Math.random() * 2
+        });
+    }
+
+    function updateParticles() {
+        // Only spawn if x > 0 (Active)
+        // Rate depends on magnitude of x
+        if (state.x > 0) {
+            const spawnRate = Math.min(0.9, state.x / 5); 
+            if (Math.random() < spawnRate) spawnParticle();
+        }
+
+        const neuronX = state.w * 0.75; // Center of neuron
+        const outputX = state.w; // Right edge
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles[i];
+            
+            // Move
+            // If x is high, particles move faster
+            const velocityMult = Math.max(1, state.x);
+            p.x += p.speed * velocityMult * 0.5;
+
+            // Collision with Neuron Wall (if inactive)
+            if (state.x <= 0 && p.x >= neuronX - 40) {
+                // Dying Logic: Hit wall and vanish
+                particles.splice(i, 1);
+                continue;
+            }
+
+            // Remove if off screen
+            if (p.x > outputX) {
+                particles.splice(i, 1);
+            }
+        }
+    }
+
+    // --- DRAWING ---
+
+    function drawGraph() {
+        const gw = state.w * 0.55; // Graph width boundary
+        
+        // Draw Axes
+        ctx.strokeStyle = CFG.fg;
+        ctx.lineWidth = 1;
+        
+        // Y-Axis
+        const originX = mapX(0);
+        ctx.beginPath();
+        ctx.moveTo(originX, 0); ctx.lineTo(originX, state.h);
+        ctx.stroke();
+
+        // X-Axis
+        const originY = mapY(0);
+        ctx.beginPath();
+        ctx.moveTo(0, originY); ctx.lineTo(gw, originY);
+        ctx.stroke();
+
+        // -- THE RELU CURVE --
+        
+        // 1. Negative Side (Flat)
+        ctx.beginPath();
+        ctx.strokeStyle = '#333333'; // Dim logic for inactive
+        ctx.setLineDash([4, 4]); // Dashed
+        ctx.lineWidth = 2;
+        ctx.moveTo(mapX(CFG.minX), mapY(0));
+        ctx.lineTo(mapX(0), mapY(0));
+        ctx.stroke();
+
+        // 2. Positive Side (Slope)
+        ctx.beginPath();
+        ctx.strokeStyle = CFG.fg;
+        ctx.setLineDash([]); // Solid
+        ctx.lineWidth = 3;
+        ctx.moveTo(mapX(0), mapY(0));
+        ctx.lineTo(mapX(CFG.maxX), mapY(CFG.maxX));
+        ctx.stroke();
+
+        // 3. Fill under curve (Active only)
+        ctx.fillStyle = patternFill;
+        ctx.beginPath();
+        ctx.moveTo(mapX(0), mapY(0));
+        ctx.lineTo(mapX(CFG.maxX), mapY(CFG.maxX));
+        ctx.lineTo(mapX(CFG.maxX), mapY(0));
+        ctx.closePath();
+        ctx.fill();
+
+        // -- CURRENT VALUE INDICATOR --
+        const cx = mapX(state.x);
+        const cy = mapY(relu(state.x));
+
+        // Drop line
+        ctx.strokeStyle = CFG.fg;
+        ctx.setLineDash([2, 2]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx, originY);
+        ctx.lineTo(cx, cy);
+        ctx.stroke();
+
+        // Point
+        ctx.fillStyle = state.x > 0 ? CFG.fg : CFG.bg;
+        ctx.strokeStyle = CFG.fg;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(cx, cy, 6, 0, Math.PI*2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Separator Line between Graph and Neuron
+        ctx.beginPath();
+        ctx.moveTo(gw, 0); ctx.lineTo(gw, state.h);
+        ctx.setLineDash([2, 4]);
+        ctx.stroke();
+    }
+
+    function drawNeuronSim() {
+        const cx = state.w * 0.775;
+        const cy = state.h / 2;
+        const radius = 40;
+
+        // Draw Pipes
+        ctx.strokeStyle = '#333'; 
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        // In Pipe
+        ctx.moveTo(state.w * 0.55, cy - 10); ctx.lineTo(cx - radius, cy - 10);
+        ctx.moveTo(state.w * 0.55, cy + 10); ctx.lineTo(cx - radius, cy + 10);
+        // Out Pipe
+        ctx.moveTo(cx + radius, cy - 10); ctx.lineTo(state.w, cy - 10);
+        ctx.moveTo(cx + radius, cy + 10); ctx.lineTo(state.w, cy + 10);
+        ctx.stroke();
+
+        // Draw Neuron Body
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = CFG.fg;
+        ctx.lineWidth = 3;
+        
+        // Fill logic based on activity
+        if (state.x > 0) {
+            ctx.fillStyle = patternCheck; // Active texture
+            ctx.fill();
+            ctx.stroke();
+            
+            // Inner glow text
+            ctx.fillStyle = CFG.bg;
+            ctx.font = "bold 12px Courier New";
+            ctx.textAlign = "center";
+            ctx.fillText("ACTIVE", cx, cy + 4);
+        } else {
+            // Inactive / Dead
+            ctx.fillStyle = CFG.bg;
+            ctx.fill();
+            ctx.stroke();
+            
+            ctx.fillStyle = '#333';
+            ctx.font = "bold 12px Courier New";
+            ctx.textAlign = "center";
+            ctx.fillText("OFF", cx, cy + 4);
+        }
+
+        // Draw Particles
+        ctx.fillStyle = CFG.fg;
+        particles.forEach(p => {
+            ctx.fillRect(p.x, p.y, p.size, p.size);
+        });
+    }
+
+    function draw() {
+        // Clear
+        ctx.fillStyle = CFG.bg;
+        ctx.fillRect(0, 0, state.w, state.h);
+
+        drawGraph();
+        drawNeuronSim();
+    }
+
+    function loop() {
+        updateParticles();
+        draw();
+        
+        // Slow down history update to every 10 frames approx
+        if (Date.now() % 100 < 20) updateHistory();
+        
+        requestAnimationFrame(loop);
+    }
+
+    function updateUI() {
+        ui.x.innerText = state.x.toFixed(2);
+        ui.y.innerText = relu(state.x).toFixed(2);
+        
+        const g = gradient(state.x);
+        ui.grad.innerText = g;
+        
+        if (state.x > 0) {
+            ui.status.innerText = "LINEAR / PASS";
+            ui.status.style.color = CFG.fg;
+        } else {
+            ui.status.innerText = "CLIPPED / OFF";
+            ui.status.style.color = '#555';
+        }
+    }
+
+    // --- EVENTS ---
+
+    function resize() {
+        const rect = wrapper.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        
+        // History canvas doesn't need high dpr as it's meant to look pixelated
+        historyCanvas.width = 100;
+        historyCanvas.height = 30;
+
+        ctx.scale(dpr, dpr);
+        state.w = rect.width;
+        state.h = rect.height;
+        draw();
+    }
+
+    function handleInput(clientX) {
+        const rect = canvas.getBoundingClientRect();
+        const mx = clientX - rect.left;
+        const gw = state.w * 0.55;
+        
+        // Only allow dragging in the graph area
+        if (mx < gw + 20) {
+            state.x = unmapX(Math.min(mx, gw));
+            updateUI();
+        }
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+        state.dragging = true;
+        handleInput(e.clientX);
+    });
+    
+    window.addEventListener('mousemove', (e) => {
+        if(state.dragging) handleInput(e.clientX);
+    });
+
+    window.addEventListener('mouseup', () => state.dragging = false);
+
+    // Touch
+    canvas.addEventListener('touchstart', (e) => {
+        state.dragging = true;
+        handleInput(e.touches[0].clientX);
+        e.preventDefault();
+    }, {passive: false});
+
+    canvas.addEventListener('touchmove', (e) => {
+        if(state.dragging) {
+            handleInput(e.touches[0].clientX);
+            e.preventDefault();
+        }
+    }, {passive: false});
+
+    window.addEventListener('resize', resize);
+
+    // Init
+    resize();
+    state.x = 0.0;
+    updateUI();
+    loop();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Multi-Path CNN // Skip Connections</title>
+    <style>
+        body { background: #000; color: #00FF41; font-family: monospace; margin: 0; overflow: hidden; }
+        .ui { position: absolute; top: 20px; left: 20px; z-index: 10; background: #000; border: 1px solid #00FF41; padding: 10px; }
+        .toggle { cursor: pointer; display: flex; align-items: center; gap: 10px; }
+        .box { width: 20px; height: 20px; border: 2px solid #00FF41; display: inline-block; }
+        .checked { background: #00FF41; }
+    </style>
+</head>
+<body>
+    <div class="ui">
+        <h3>MULTI-PATH ARCHITECTURE</h3>
+        <div class="toggle" onclick="toggleSkip()">
+            <div class="box" id="box"></div>
+            <span>ENABLE SKIP CONNECTIONS</span>
+        </div>
+        <p id="status">STATUS: LOW RES OUTPUT (SPATIAL LOSS)</p>
+    </div>
+    <canvas id="c"></canvas>
+
+<script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const box = document.getElementById('box');
+    const status = document.getElementById('status');
+    
+    let skipEnabled = false;
+    
+    function toggleSkip() {
+        skipEnabled = !skipEnabled;
+        box.className = skipEnabled ? 'box checked' : 'box';
+        status.innerText = skipEnabled ? "STATUS: HIGH RES (DETAILS PRESERVED)" : "STATUS: LOW RES OUTPUT (SPATIAL LOSS)";
+    }
+
+    let w, h;
+    function resize() { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function drawBlock(x, y, w, h, label) {
+        ctx.strokeStyle = '#00FF41';
+        ctx.lineWidth = 2;
+        ctx.fillStyle = '#000';
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeRect(x, y, w, h);
+        ctx.fillStyle = '#00FF41';
+        ctx.fillText(label, x + 5, y + h/2 + 5);
+    }
+
+    function drawCurve(x1, y1, x2, y2, active) {
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.bezierCurveTo(x1 + (x2-x1)/2, y1 - 100, x2 - (x2-x1)/2, y1 - 100, x2, y2);
+        ctx.strokeStyle = active ? '#00FF41' : '#003300';
+        ctx.setLineDash(active ? [] : [5, 5]);
+        ctx.lineWidth = active ? 3 : 1;
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // Data packets
+        if(active) {
+            const t = (Date.now() * 0.002) % 1;
+            // Bezier calc
+            const bx = (1-t)*(1-t)*(1-t)*x1 + 3*(1-t)*(1-t)*t*(x1 + (x2-x1)/2) + 3*(1-t)*t*t*(x2 - (x2-x1)/2) + t*t*t*x2;
+            const by = (1-t)*(1-t)*(1-t)*y1 + 3*(1-t)*(1-t)*t*(y1 - 100) + 3*(1-t)*t*t*(y1 - 100) + t*t*t*y2;
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(bx-3, by-3, 6, 6);
+        }
+    }
+
+    function loop() {
+        ctx.fillStyle = '#000'; ctx.fillRect(0,0,w,h);
+        
+        const cy = h/2;
+        const cx = w/2;
+
+        // Architecture: U-Net shape
+        // Enc 1 -> Enc 2 -> Bottleneck -> Dec 2 -> Dec 1
+        
+        // Blocks
+        const bSize = 60;
+        const gap = 100;
+        
+        // Encoder
+        drawBlock(cx - 300, cy - 50, 50, 100, "ENC1");
+        drawBlock(cx - 150, cy, 50, 50, "ENC2");
+        
+        // Bottleneck
+        drawBlock(cx, cy + 50, 50, 25, "BOTTLE");
+        
+        // Decoder
+        drawBlock(cx + 150, cy, 50, 50, "DEC2");
+        drawBlock(cx + 300, cy - 50, 50, 100, "DEC1");
+
+        // Main Flow Lines
+        ctx.strokeStyle = '#00FF41';
+        ctx.beginPath();
+        ctx.moveTo(cx - 250, cy); ctx.lineTo(cx - 150, cy + 25);
+        ctx.moveTo(cx - 100, cy + 25); ctx.lineTo(cx, cy + 62);
+        ctx.moveTo(cx + 50, cy + 62); ctx.lineTo(cx + 150, cy + 25);
+        ctx.moveTo(cx + 200, cy + 25); ctx.lineTo(cx + 300, cy);
+        ctx.stroke();
+
+        // Skip Connections
+        // Skip 1: Enc1 top to Dec1 top
+        drawCurve(cx - 275, cy - 50, cx + 325, cy - 50, skipEnabled);
+        
+        // Skip 2: Enc2 top to Dec2 top
+        drawCurve(cx - 125, cy, cx + 175, cy, skipEnabled);
+
+        // Result Visualization
+        const outX = cx + 400;
+        const outY = cy - 50;
+        ctx.strokeStyle = '#00FF41';
+        ctx.strokeRect(outX, outY, 80, 80);
+        ctx.fillStyle = '#00FF41';
+        ctx.fillText("OUTPUT", outX, outY - 10);
+        
+        // Draw "Image" inside output
+        // If skip is OFF: Blurry blocks. If skip is ON: Sharp dots.
+        for(let i=0; i<20; i++) {
+            const rx = outX + Math.random()*80;
+            const ry = outY + Math.random()*80;
+            if(skipEnabled) {
+                // High detail
+                ctx.fillRect(rx, ry, 2, 2);
+            } else {
+                // Low detail blocks
+                ctx.globalAlpha = 0.5;
+                ctx.fillRect(rx - 5, ry - 5, 10, 10);
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        requestAnimationFrame(loop);
+    }
+    loop();
+</script>
+</body>
+</html>

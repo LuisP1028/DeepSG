@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNN-LSTM Sonar Visualizer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        :root {
+            --bg-color: #000500;
+            --fg-color: #00FF00;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            color: var(--fg-color);
+            font-family: 'VT323', monospace;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* UI LAYOUT */
+        #ui-top {
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid var(--fg-color);
+            padding: 0 20px;
+            font-size: 1.4rem;
+            z-index: 10;
+            background: var(--bg-color);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        #ui-status {
+            animation: pulse 2s infinite;
+        }
+
+        #canvas-wrapper {
+            flex-grow: 1;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+            overflow: hidden;
+        }
+
+        /* Canvas scaling */
+        canvas {
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Radar Overlay */
+        #radar-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(rgba(0,50,0,0), rgba(0,20,0,0.8)),
+                        repeating-linear-gradient(0deg, transparent, transparent 2px, #001100 3px);
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        #ui-bottom {
+            height: 60px;
+            border-top: 2px solid var(--fg-color);
+            padding: 10px 20px;
+            font-size: 1.2rem;
+            background: var(--bg-color);
+            z-index: 10;
+            display: flex;
+            align-items: center;
+        }
+
+        #typewriter {
+            border-right: 10px solid var(--fg-color);
+            white-space: pre-wrap;
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink { 50% { border-color: transparent; } }
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+    </style>
+</head>
+<body>
+
+    <div id="ui-top">
+        <span>SONAR_NET_V2.1</span>
+        <span id="ui-status">SYSTEM_ACTIVE</span>
+    </div>
+
+    <div id="canvas-wrapper">
+        <canvas id="mainCanvas"></canvas>
+        <div id="radar-overlay"></div>
+    </div>
+
+    <div id="ui-bottom">
+        <span id="typewriter">Initializing Sensor Array...</span>
+    </div>
+
+    <script>
+        /**
+         * ENGINE SETUP
+         */
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        
+        // Low res for retro radar look
+        const RES_X = 320;
+        const RES_Y = 240;
+        canvas.width = RES_X;
+        canvas.height = RES_Y;
+
+        // Buffer for drawing
+        const buffer = document.createElement('canvas');
+        buffer.width = RES_X;
+        buffer.height = RES_Y;
+        const bctx = buffer.getContext('2d');
+
+        // State Machine
+        let frameCount = 0;
+        let sceneIndex = 0;
+        const SCENE_DURATION = 400; // frames per scene cycle
+
+        // Data for the 5 frames (Position of mine Y coordinate)
+        // Mine moves down slightly across the frames
+        const mineData = [
+            { y: 10, noiseOffset: 0 },
+            { y: 12, noiseOffset: 100 },
+            { y: 15, noiseOffset: 200 },
+            { y: 19, noiseOffset: 300 },
+            { y: 24, noiseOffset: 400 }
+        ];
+
+        const sceneConfig = [
+            { id: 0, text: "INPUT SEQ: 5 Time-Distributed Frames. Raw Sonar Data (Noisy)." },
+            { id: 1, text: "CNN LAYER: Shared Weights applied. Filtering Reverberation." },
+            { id: 2, text: "FLATTENING: Crushing 2D Maps into 1D Feature Vectors." },
+            { id: 3, text: "LSTM LAYER: Processing sequence. Context accumulates over time." }
+        ];
+
+        /**
+         * ASSET DRAWING HELPERS
+         */
+
+        // Draw a single frame (Square)
+        // x, y: position
+        // w: width (can be animated for flattening)
+        // mineY: internal Y pos of the object
+        // noiseLevel: 0 to 1
+        // solid: boolean (if true, draws clean feature map)
+        function drawFrame(x, y, w, h, mineY, noiseLevel, solid) {
+            
+            // Frame Border
+            bctx.strokeStyle = '#004400';
+            bctx.strokeRect(x, y, w, h);
+
+            // Clip context to this frame
+            bctx.save();
+            bctx.beginPath();
+            bctx.rect(x, y, w, h);
+            bctx.clip();
+
+            // 1. Draw Noise
+            if (noiseLevel > 0) {
+                // Procedural static
+                for(let i=0; i< (w*h/3); i++) {
+                    if (Math.random() < noiseLevel) {
+                        let nx = x + Math.random() * w;
+                        let ny = y + Math.random() * h;
+                        bctx.fillStyle = Math.random() > 0.5 ? '#003300' : '#001100';
+                        bctx.fillRect(nx, ny, 1, 1);
+                    }
+                }
+            }
+
+            // 2. Draw Mine Object
+            // Only draw if width is wide enough to see it (prevents glitching during full flatten)
+            if (w > 2) {
+                let objX = x + (w/2);
+                let objY = y + mineY;
+                
+                bctx.fillStyle = solid ? '#FFFFFF' : '#00AA00'; // White for cleaned feature, Green for raw
+                
+                // Draw Spiky Ball
+                bctx.beginPath();
+                bctx.arc(objX, objY, 4, 0, Math.PI*2);
+                bctx.fill();
+                
+                // Spikes
+                if (solid || noiseLevel < 0.5) {
+                    bctx.strokeStyle = bctx.fillStyle;
+                    bctx.beginPath();
+                    bctx.moveTo(objX-6, objY); bctx.lineTo(objX+6, objY);
+                    bctx.moveTo(objX, objY-6); bctx.lineTo(objX, objY+6);
+                    bctx.moveTo(objX-4, objY-4); bctx.lineTo(objX+4, objY+4);
+                    bctx.moveTo(objX-4, objY+4); bctx.lineTo(objX+4, objY-4);
+                    bctx.stroke();
+                }
+            } else {
+                // When flattened to a 1D bar, just draw a "blip" at the Y level
+                bctx.fillStyle = '#FFFFFF';
+                bctx.fillRect(x, y + mineY - 2, w, 4);
+            }
+
+            bctx.restore();
+        }
+
+        // Draw Connection Lines
+        function drawArrow(x1, y1, x2, y2) {
+            bctx.strokeStyle = "#005500";
+            bctx.beginPath();
+            bctx.moveTo(x1, y1);
+            bctx.lineTo(x2, y2);
+            bctx.stroke();
+        }
+
+        /**
+         * SCENE RENDERERS
+         */
+
+        // 1. INPUT SCENE
+        function drawSceneInput(t) {
+            let p = t / 100; // Animation progress
+            
+            // Draw AUV / Drone at top
+            let droneX = (frameCount % 400) - 40;
+            bctx.fillStyle = "#004400";
+            bctx.fillRect(droneX, 10, 30, 10);
+            bctx.fillStyle = "#00FF00";
+            bctx.fillText("AUV-01", droneX, 8);
+            
+            // Draw Sonar Waves from Drone
+            if (Math.floor(frameCount / 10) % 2 === 0) {
+                bctx.strokeStyle = "#00FF00";
+                bctx.beginPath();
+                bctx.arc(droneX+15, 20, 10, 0, Math.PI, false);
+                bctx.stroke();
+            }
+
+            // Draw 5 Raw Frames
+            let startX = 20;
+            let gap = 60;
+            let startY = 50;
+
+            for(let i=0; i<5; i++) {
+                // Highlight current frame based on drone pos roughly
+                let highlight = (droneX > startX + (i*gap) - 20 && droneX < startX + (i*gap) + 40);
+                
+                bctx.strokeStyle = highlight ? "#FFF" : "#004400";
+                bctx.strokeRect(startX + (i*gap) - 2, startY - 2, 44, 44);
+
+                drawFrame(startX + (i*gap), startY, 40, 40, mineData[i].y + 10, 0.8, false); // High noise
+                
+                bctx.fillStyle = "#008800";
+                bctx.fillText(`t${i+1}`, startX + (i*gap), startY + 52);
+            }
+        }
+
+        // 2. CNN SCENE (Noise Removal)
+        function drawSceneCNN(t) {
+            let startX = 20;
+            let gap = 60;
+            let startY = 80;
+
+            // Draw "Filter" Box
+            bctx.strokeStyle = "#00FF00";
+            bctx.setLineDash([2, 2]);
+            bctx.strokeRect(10, 60, 300, 80);
+            bctx.setLineDash([]);
+            bctx.fillStyle = "#00FF00";
+            bctx.fillText("SHARED CNN WEIGHTS", 15, 72);
+
+            // Scan Line Effect
+            let scanY = 80 + (frameCount % 60);
+
+            for(let i=0; i<5; i++) {
+                let bx = startX + (i*gap);
+                
+                // Draw Base Frame (Cleaned)
+                drawFrame(bx, startY, 40, 40, mineData[i].y + 10, 0, true);
+
+                // Draw "Scanning" overlay (faking the processing)
+                if (scanY < startY + 40) {
+                    // Draw Noise on top of the not-yet-scanned part
+                    bctx.save();
+                    bctx.beginPath();
+                    bctx.rect(bx, scanY, 40, (startY+40) - scanY);
+                    bctx.clip();
+                    drawFrame(bx, startY, 40, 40, mineData[i].y + 10, 0.8, false); // Draw noisy version
+                    bctx.restore();
+
+                    // The Laser Line
+                    bctx.fillStyle = "#FFF";
+                    bctx.fillRect(bx, scanY, 40, 2);
+                }
+            }
+        }
+
+        // 3. FLATTENING SCENE (The Collapse)
+        function drawSceneFlatten(t) {
+            let p = Math.min(1, (frameCount % 150) / 100); // 0 to 1 over 100 frames
+            // p=0: Square, p=1: Line
+
+            let startX = 20;
+            let gap = 60;
+            let startY = 100;
+
+            // Easing
+            let ease = p * p * (3 - 2 * p);
+            
+            let currentW = 40 * (1 - ease);
+            if (currentW < 4) currentW = 4; // Minimum width representing vector
+
+            for(let i=0; i<5; i++) {
+                let bx = startX + (i*gap);
+                // Center the shrinking box
+                let cx = bx + 20 - (currentW/2);
+
+                // Draw the transforming frame
+                drawFrame(cx, startY, currentW, 40, mineData[i].y + 10, 0, true);
+
+                // Draw vector brackets
+                if (ease > 0.8) {
+                    bctx.strokeStyle = "#FFF";
+                    bctx.beginPath();
+                    bctx.moveTo(cx - 2, startY); bctx.lineTo(cx - 4, startY); bctx.lineTo(cx-4, startY+40); bctx.lineTo(cx-2, startY+40);
+                    bctx.moveTo(cx + currentW + 2, startY); bctx.lineTo(cx + currentW + 4, startY); bctx.lineTo(cx+currentW+4, startY+40); bctx.lineTo(cx+currentW+2, startY+40);
+                    bctx.stroke();
+                }
+            }
+
+            bctx.fillStyle = "#FFF";
+            bctx.fillText(p < 0.5 ? "2D MAP" : "1D VECTOR", 140, 160);
+        }
+
+        // 4. LSTM SCENE (Sequence)
+        function drawSceneLSTM(t) {
+            let startX = 20;
+            let gap = 60;
+            let startY = 100;
+            let vectorW = 6;
+            let vectorH = 40;
+
+            // Draw Timeline
+            bctx.strokeStyle = "#004400";
+            bctx.beginPath();
+            bctx.moveTo(20, 150); bctx.lineTo(280, 150);
+            bctx.stroke();
+
+            // Calculate "Head" Position
+            let stepDuration = 60;
+            let totalSteps = 5;
+            let progress = (frameCount % (stepDuration * totalSteps));
+            let currentStep = Math.floor(progress / stepDuration);
+
+            // Draw Vectors
+            for(let i=0; i<5; i++) {
+                let bx = startX + (i*gap) + 20 - (vectorW/2);
+                
+                // Active State
+                let isActive = (i <= currentStep);
+                let isCurrent = (i === currentStep);
+
+                // Draw Vector Bar
+                bctx.fillStyle = isActive ? "#FFF" : "#005500";
+                // Internal "Blip"
+                bctx.fillRect(bx, startY, vectorW, vectorH);
+                bctx.fillStyle = "#000";
+                bctx.fillRect(bx, startY + mineData[i].y + 8, vectorW, 4); // The "data"
+
+                // Draw LSTM Cell (Circle below)
+                bctx.strokeStyle = isActive ? "#FFF" : "#004400";
+                bctx.fillStyle = isCurrent ? "#FFFFFF" : "#000000";
+                bctx.beginPath();
+                bctx.arc(bx + 3, 150, 6, 0, Math.PI*2);
+                bctx.fill();
+                bctx.stroke();
+
+                // Draw Memory Wire (Hidden State)
+                if (i > 0 && isActive) {
+                    let prevX = startX + ((i-1)*gap) + 20;
+                    bctx.strokeStyle = "#FFF";
+                    bctx.beginPath();
+                    bctx.moveTo(prevX + 3 + 6, 150);
+                    bctx.lineTo(bx + 3 - 6, 150);
+                    bctx.stroke();
+                }
+            }
+
+            // Output Logic
+            if (currentStep === 4) {
+                bctx.fillStyle = "#00FF00";
+                bctx.font = "20px monospace";
+                bctx.fillText("OBJECT DETECTED: MINE", 80, 200);
+                bctx.fillStyle = "#FFF";
+                bctx.fillRect(80, 205, 140, 10); // Loading bar
+            }
+        }
+
+        /**
+         * POST-PROCESS: DITHERING
+         */
+        function applyDither() {
+            const imageData = bctx.getImageData(0, 0, RES_X, RES_Y);
+            const data = imageData.data;
+            const w = RES_X;
+            const h = RES_Y;
+
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const i = (y * w + x) * 4;
+                    
+                    // Simple green-channel luminance
+                    const oldPixel = data[i+1]; 
+                    const newPixel = oldPixel < 80 ? 0 : 255; // Threshold
+                    const error = Math.floor((oldPixel - newPixel) / 8);
+
+                    // Set Final Color (Black or Green)
+                    data[i] = 0;
+                    data[i+1] = newPixel;
+                    data[i+2] = 0;
+
+                    if (error === 0) continue;
+
+                    // Atkinson Dist
+                    if (x + 1 < w)       data[((y)*w + (x+1))*4 + 1] += error;
+                    if (x + 2 < w)       data[((y)*w + (x+2))*4 + 1] += error;
+                    if (x > 0 && y + 1 < h) data[((y+1)*w + (x-1))*4 + 1] += error;
+                    if (y + 1 < h)       data[((y+1)*w + (x))*4 + 1] += error;
+                    if (x + 1 < w && y + 1 < h) data[((y+1)*w + (x+1))*4 + 1] += error;
+                    if (y + 2 < h)       data[((y+2)*w + (x))*4 + 1] += error;
+                }
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        /**
+         * MAIN LOOP
+         */
+        const uiText = document.getElementById('typewriter');
+        
+        function loop() {
+            frameCount++;
+
+            // Manage Scene Switching
+            let totalCycle = SCENE_DURATION * 4;
+            let globalFrame = frameCount % totalCycle;
+            sceneIndex = Math.floor(globalFrame / SCENE_DURATION);
+            
+            // Local frame counter for specific scene animations
+            let sceneTime = globalFrame % SCENE_DURATION;
+
+            // Update UI Text
+            if (uiText.innerText !== sceneConfig[sceneIndex].text) {
+                uiText.innerText = sceneConfig[sceneIndex].text;
+            }
+
+            // Clear
+            bctx.fillStyle = "#001100";
+            bctx.fillRect(0, 0, RES_X, RES_Y);
+
+            // Draw Active Scene
+            switch(sceneIndex) {
+                case 0: drawSceneInput(sceneTime); break;
+                case 1: drawSceneCNN(sceneTime); break;
+                case 2: drawSceneFlatten(sceneTime); break;
+                case 3: drawSceneLSTM(sceneTime); break;
+            }
+
+            // Render
+            applyDither();
+
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+
+    </script>
+</body>
+</html>

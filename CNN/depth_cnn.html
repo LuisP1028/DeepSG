@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Depth Based CNN // Ditherpunk</title>
+    <style>
+        body { background: #000; color: #00FF41; margin: 0; font-family: monospace; overflow: hidden; display: flex; }
+        .sidebar { width: 300px; padding: 20px; border-right: 2px solid #00FF41; display: flex; flex-direction: column; gap: 20px; }
+        .main { flex: 1; position: relative; background: #000; }
+        button { background: #000; color: #00FF41; border: 2px solid #00FF41; padding: 15px; font-family: inherit; cursor: pointer; font-size: 1.2rem; }
+        button:hover { background: #00FF41; color: #000; }
+        canvas { display: block; width: 100%; height: 100%; }
+        .layer-count { font-size: 4rem; font-weight: bold; text-align: center; border: 2px dashed #00FF41; padding: 20px; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h1>DEPTH HIERARCHY</h1>
+        <p>STACK LAYERS TO BUILD COMPLEXITY.</p>
+        <div class="layer-count" id="count-disp">1</div>
+        <button id="btn-add">[+] ADD LAYER</button>
+        <button id="btn-rem">[-] REMOVE LAYER</button>
+        <div id="desc">STATUS: DETECTING EDGES</div>
+    </div>
+    <div class="main">
+        <canvas id="c"></canvas>
+    </div>
+
+<script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    let layers = 1;
+    const maxLayers = 5;
+    
+    document.getElementById('btn-add').onclick = () => { if(layers < maxLayers) layers++; updateDesc(); };
+    document.getElementById('btn-rem').onclick = () => { if(layers > 1) layers--; updateDesc(); };
+
+    function updateDesc() {
+        document.getElementById('count-disp').innerText = layers;
+        const txt = [
+            "",
+            "LAYER 1: SIMPLE EDGES (Lines)",
+            "LAYER 2: CORNERS & CURVES",
+            "LAYER 3: TEXTURES & PARTS",
+            "LAYER 4: OBJECT PARTS (Eyes/Wheels)",
+            "LAYER 5: WHOLE OBJECT (Face/Car)"
+        ];
+        document.getElementById('desc').innerText = "STATUS: " + txt[layers];
+    }
+
+    let w, h;
+    function resize() { w = canvas.width = canvas.offsetWidth; h = canvas.height = canvas.offsetHeight; }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Dither pattern generator
+    function ditherFill(x, y, size, density) {
+        for(let i=0; i<(size*size*density); i++) {
+            ctx.fillRect(x + Math.random()*size, y + Math.random()*size, 2, 2);
+        }
+    }
+
+    function drawLayerBlock(idx, total) {
+        const blockH = h / (maxLayers + 1);
+        const y = h - (idx * blockH) - 100;
+        const x = w/2 - 100;
+        
+        ctx.strokeStyle = '#00FF41';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, 200, blockH - 20);
+        
+        // Connectors
+        if(idx > 1) {
+            ctx.beginPath();
+            ctx.moveTo(x + 100, y + blockH - 20);
+            ctx.lineTo(x + 100, y + blockH); // Down to prev
+            ctx.stroke();
+        }
+
+        // CONTENT VISUALIZATION
+        // Layer 1: Lines
+        // Layer 3: Shapes
+        // Layer 5: Face
+        const cx = x + 100;
+        const cy = y + (blockH-20)/2;
+
+        ctx.fillStyle = '#00FF41';
+
+        if(idx === 1) {
+            // Random lines
+            for(let i=0; i<5; i++) ctx.fillRect(cx - 50 + i*20, cy - 10 + Math.sin(Date.now()*0.01 + i)*10, 20, 2);
+        } else if (idx <= 3) {
+            // Shapes (Triangle)
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - 20);
+            ctx.lineTo(cx + 20, cy + 20);
+            ctx.lineTo(cx - 20, cy + 20);
+            ctx.stroke();
+            ditherFill(cx-10, cy-10, 20, 0.2);
+        } else {
+            // Complex (Smiley)
+            ctx.beginPath();
+            ctx.arc(cx, cy, 30, 0, Math.PI*2);
+            ctx.stroke();
+            // Eyes
+            ctx.fillRect(cx - 10, cy - 10, 4, 4);
+            ctx.fillRect(cx + 10, cy - 10, 4, 4);
+            // Mouth
+            ctx.beginPath();
+            ctx.arc(cx, cy, 20, 0, Math.PI, false);
+            ctx.stroke();
+        }
+    }
+
+    function loop() {
+        ctx.fillStyle = '#000'; ctx.fillRect(0,0,w,h);
+        
+        // Draw Stack
+        for(let i=1; i<=layers; i++) {
+            drawLayerBlock(i, layers);
+        }
+
+        // Data Flow Particles
+        const time = Date.now() * 0.005;
+        const flowY = h - ((time % (layers * 10)) * (h / (maxLayers*10)) ) - 50; 
+        // Simple particle rising
+        ctx.fillStyle = '#fff';
+        if(flowY > (h - (layers * (h/(maxLayers+1))) - 100)) {
+            ctx.fillRect(w/2, flowY, 4, 4);
+        }
+
+        requestAnimationFrame(loop);
+    }
+    loop();
+</script>
+</body>
+</html>
