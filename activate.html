@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Part II: Searching // Study Guide</title>
+<style>
+/*
+--- STYLE CONFIGURATION ---
+*/
+:root {
+--bg-color: #000000;
+--text-color: #00ff41;
+--accent-color: #00ff41;
+--dim-color: #003b00;
+--border-color: #00ff41;
+--font-main: 'Courier New', Courier, monospace;
+--font-header: 'Arial Black', Impact, sans-serif;
+}
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: var(--font-main);
+    line-height: 1.5;
+    overflow-x: hidden;
+}
+
+.dither-layer {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    z-index: -1;
+    background-image: radial-gradient(circle, #003b00 1px, transparent 1px);
+    background-size: 4px 4px;
+    opacity: 0.4;
+}
+
+.scanlines {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(to bottom, rgba(0, 255, 65, 0), rgba(0, 255, 65, 0) 50%, rgba(0, 20, 0, 0.2) 50%, rgba(0, 20, 0, 0.2));
+    background-size: 100% 4px;
+    pointer-events: none;
+    z-index: 9999;
+}
+
+.container {
+    max-width: 900px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 40px 20px;
+    border-left: 2px dashed var(--dim-color);
+    border-right: 2px dashed var(--dim-color);
+    background-color: rgba(0, 10, 0, 0.9);
+    min-height: 100vh;
+}
+
+h1 {
+    font-family: var(--font-header);
+    text-transform: uppercase;
+    font-size: 2.5rem;
+    border-bottom: 5px solid var(--accent-color);
+    margin-bottom: 40px;
+    color: var(--accent-color);
+    text-align: center;
+}
+
+strong { color: var(--accent-color); text-decoration: underline; }
+em { font-style: normal; color: #50c878; border-bottom: 1px dotted var(--dim-color); }
+
+/* ACCORDION STYLES */
+details.section {
+    margin-bottom: 15px;
+    border: 1px solid var(--dim-color);
+    background: #050505;
+}
+
+details.section > summary {
+    font-family: var(--font-main);
+    font-weight: bold;
+    padding: 12px;
+    background: #0a0a0a;
+    color: var(--text-color);
+    cursor: pointer;
+    list-style: none;
+    border-bottom: 1px solid transparent;
+    text-transform: uppercase;
+    font-size: 1.1rem;
+}
+
+details.section > summary:hover { background: var(--dim-color); color: var(--accent-color); }
+details.section[open] > summary {
+    border-bottom: 1px solid var(--dim-color);
+    background: #0f0f0f;
+    color: var(--accent-color);
+    text-shadow: 0px 0px 5px var(--accent-color);
+}
+
+.section-content { padding: 20px; }
+
+/* Kept for legacy compatibility, though subsections are now top-level sections */
+.subsection {
+    margin-bottom: 25px;
+    border-left: 4px solid var(--dim-color);
+    padding-left: 15px;
+}
+
+.subsection-title {
+    background: var(--dim-color);
+    color: var(--accent-color);
+    padding: 2px 6px;
+    font-weight: bold;
+    text-transform: uppercase;
+    display: inline-block;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+}
+
+p { margin-bottom: 12px; margin-top: 0; text-align: justify; }
+ul { padding-left: 20px; margin-bottom: 15px; }
+li { margin-bottom: 5px; }
+
+.code-block {
+    background: #020a02;
+    border: 1px dashed var(--dim-color);
+    padding: 10px;
+    margin: 10px 0;
+    font-family: 'Courier New', monospace;
+    color: var(--accent-color);
+    overflow-x: auto;
+    white-space: pre-wrap;
+}
+</style>
+</head>
+<body>
+<div class="dither-layer"></div>
+<div class="scanlines"></div>
+
+<div class="container">
+<h1>BASIC ACTIVATION FUNCTIONS</h1>
+
+<div class="part-content">
+    
+    <!-- Overview Section -->
+    <details class="section" open>
+        <summary>Overview</summary>
+        <div class="section-content">
+            <p><strong>Activation Functions</strong></p>
+            <p>Activation functions introduce non-linearity into neural networks, allowing them to learn complex patterns. Without them, a deep network would behave like a single linear layer regardless of depth.</p>
+        </div>
+    </details>
+
+    <!-- Sigmoid Section -->
+    <details class="section">
+        <summary>Sigmoid</summary>
+        <div class="section-content">
+            <p>σ(x) = 1 / (1 + e⁻ˣ)</p>
+            <p>Output range: [0, 1]</p>
+            <p>Historically used in output layers for binary classification (interpretable as probability).</p>
+            <p>Major drawbacks:</p>
+            <ul>
+                <li><strong>Vanishing gradient</strong>: gradients near 0 or 1 become tiny → slow or stalled learning in early layers.</li>
+                <li>Outputs are not zero-centered → can cause zig-zagging updates.</li>
+            </ul>
+        </div>
+    </details>
+
+    <!-- Tanh Section -->
+    <details class="section">
+        <summary>Tanh (Hyperbolic Tangent)</summary>
+        <div class="section-content">
+            <p>tanh(x) = (eˣ - e⁻ˣ) / (eˣ + e⁻ˣ)</p>
+            <p>Output range: [-1, 1]</p>
+            <p>Zero-centered (better than sigmoid for hidden layers) → gradients more likely to point in useful directions.</p>
+            <p>Still suffers from <strong>vanishing gradient</strong> problem for large |x|.</p>
+        </div>
+    </details>
+
+    <!-- ReLU Section -->
+    <details class="section">
+        <summary>ReLU (Rectified Linear Unit)</summary>
+        <div class="section-content">
+            <p>f(x) = max(0, x)</p>
+            <p>Output range: [0, ∞)</p>
+            <p>Advantages:</p>
+            <ul>
+                <li>Very fast to compute (simple thresholding).</li>
+                <li>No vanishing gradient for positive values → faster convergence in practice.</li>
+                <li>Promotes sparsity (many neurons output 0) → efficient computation & regularization effect.</li>
+            </ul>
+            <p>Main issue: <strong>Dying ReLU</strong> problem — neurons can get stuck outputting 0 forever if they receive only negative inputs (gradient = 0).</p>
+        </div>
+    </details>
+
+    <!-- Leaky ReLU Section -->
+    <details class="section">
+        <summary>Leaky ReLU</summary>
+        <div class="section-content">
+            <p>f(x) = max(αx, x)   where α is a small constant (typically 0.01)</p>
+            <p>Output range: (-∞, ∞)</p>
+            <p>Fixes dying ReLU by allowing a small, non-zero gradient when x < 0 → keeps neurons "alive" and learning even when mostly inactive.</p>
+            <p>Variants: Parametric ReLU (PReLU — α is learned), ELU, GELU, Swish, etc., offer further improvements in some cases.</p>
+        </div>
+    </details>
+
+    <!-- Summary Section -->
+    <details class="section">
+        <summary>Quick Comparison Summary</summary>
+        <div class="section-content">
+            <ul>
+                <li><strong>Sigmoid</strong>: Good for binary output layers; avoid in hidden layers.</li>
+                <li><strong>Tanh</strong>: Better than sigmoid for hidden layers; still prone to vanishing gradients.</li>
+                <li><strong>ReLU</strong>: Default choice for most hidden layers — fast & effective.</li>
+                <li><strong>Leaky ReLU / variants</strong>: Use when you suspect dying neurons or want smoother behavior on negatives.</li>
+            </ul>
+        </div>
+    </details>
+
+</div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEURAL_NET_VISUALIZER // CONTENT_LOSS</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --term-color: #ffb000; /* Amber Monochrome */
+            --term-dim: #5c450f;
+            --highlight: #ffffff;
+            --crt-scanline: rgba(18, 16, 16, 0.3);
+        }
+
+        @font-face {
+            font-family: 'Terminal';
+            src: local('Courier New'), local('Consolas'), monospace;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--term-color);
+            font-family: 'Terminal', monospace;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* LAYOUT */
+        #main-container {
+            display: flex;
+            flex: 1;
+            position: relative;
+            border: 2px solid var(--term-color);
+            margin: 10px;
+            box-shadow: 0 0 15px var(--term-color);
+        }
+
+        #canvas-container {
+            flex: 3;
+            background: #000;
+            position: relative;
+            image-rendering: pixelated;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #sidebar {
+            flex: 1;
+            border-left: 2px solid var(--term-color);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            background: rgba(255, 176, 0, 0.05);
+        }
+
+        /* UI ELEMENTS */
+        h1 {
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            border-bottom: 1px dashed var(--term-color);
+            padding-bottom: 10px;
+            margin: 0;
+            letter-spacing: 2px;
+        }
+
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        button {
+            background: transparent;
+            border: 1px solid var(--term-color);
+            color: var(--term-color);
+            padding: 10px;
+            font-family: 'Terminal', monospace;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-weight: bold;
+            transition: all 0.1s;
+        }
+
+        button:hover {
+            background: var(--term-color);
+            color: var(--bg-color);
+        }
+
+        button.active {
+            background: var(--term-color);
+            color: var(--bg-color);
+            box-shadow: 0 0 10px var(--term-color);
+        }
+
+        .info-box {
+            font-size: 0.8rem;
+            line-height: 1.4;
+            border: 1px solid var(--term-dim);
+            padding: 10px;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .legend {
+            font-size: 0.75rem;
+            display: grid;
+            grid-template-columns: 20px 1fr;
+            gap: 5px;
+            align-items: center;
+        }
+        .swatch { width: 10px; height: 10px; display: inline-block; }
+        .sw-input { background: #55aaff; }
+        .sw-kernel { background: #55ff55; }
+        .sw-output { background: #ffaa55; }
+
+        /* CRT EFFECTS */
+        .scanlines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                to bottom,
+                var(--crt-scanline) 50%,
+                rgba(0,0,0,0) 50%
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .glow-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.7);
+            pointer-events: none;
+            z-index: 11;
+        }
+
+        /* TEXT UTILS */
+        .blink { animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0; } }
+
+    </style>
+</head>
+<body>
+
+    <div id="main-container">
+        <div id="canvas-container">
+            <canvas id="mainCanvas"></canvas>
+            <div class="scanlines"></div>
+            <div class="glow-overlay"></div>
+        </div>
+
+        <div id="sidebar">
+            <h1>SYS.VISUALIZER_V1</h1>
+            
+            <div class="control-panel">
+                <button id="btn-proc1" class="active" onclick="setMode(1)">[1] CONVOLUTION</button>
+                <button id="btn-proc2" onclick="setMode(2)">[2] FLATTENING</button>
+            </div>
+
+            <div id="info-display" class="info-box">
+                > INITIALIZING SYSTEM...<br>
+                > MODE: PROCESS 1 (CONVOLUTION)<br>
+                > STATUS: TRANSFORMING VOLUME<br>
+                > INPUT: 3x3x3 TENSOR<br>
+                > KERNEL: 2x2x3 (STRIDE 1)<br>
+                > OUTPUT: 2x2x3 VOLUME<br>
+                <br>
+                <span class="blink">_</span>
+            </div>
+
+            <div class="legend-box">
+                <div style="margin-bottom:5px; text-decoration: underline;">LEGEND:</div>
+                <div class="legend"><span class="swatch sw-input"></span> INPUT DATA</div>
+                <div class="legend"><span class="swatch sw-kernel"></span> KERNEL/FILTER</div>
+                <div class="legend"><span class="swatch sw-output"></span> FEATURE MAP</div>
+            </div>
+        </div>
+    </div>
+
+<script>
+/**
+ * DITHERPUNK VISUALIZER ENGINE
+ * Implements Isometric projection and Atkinson Dithering
+ */
+
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+const infoDisplay = document.getElementById('info-display');
+
+// Internal resolution (lower than screen for chunky pixel look)
+const RENDER_W = 640;
+const RENDER_H = 360;
+
+// State
+let currentMode = 1; // 1 = Convolution, 2 = Flattening
+let frameCount = 0;
+
+// Isometric Constants
+const TILE_W = 24;
+const TILE_H = 12; // Height of the diamond
+const ORIGIN_X = RENDER_W / 2;
+const ORIGIN_Y = 100;
+
+// Data Structures
+const INPUT_SIZE = 3;
+const KERNEL_SIZE = 2;
+const OUTPUT_SIZE = 2; // (3 - 2)/1 + 1 = 2
+const CHANNELS = 3;
+
+// Resize handling
+function resize() {
+    // Keep internal resolution fixed for pixel art look, scale via CSS
+    canvas.width = RENDER_W;
+    canvas.height = RENDER_H;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- ISO UTILITIES ---
+
+function iso(x, y, z, offsetX = 0, offsetY = 0) {
+    // x: column, y: row, z: layer (up)
+    // Standard isometric projection
+    const screenX = offsetX + (x - y) * TILE_W;
+    const screenY = offsetY + (x + y) * TILE_H - (z * TILE_H * 1.5);
+    return { x: screenX, y: screenY };
+}
+
+function drawCube(x, y, z, color, label = null, offsetX = ORIGIN_X, offsetY = ORIGIN_Y, opacity = 1.0) {
+    const pos = iso(x, y, z, offsetX, offsetY);
+    
+    ctx.lineWidth = 1;
+    ctx.lineJoin = 'round';
+    
+    // Fill Colors (Simulated lighting)
+    const cTop = color;
+    const cRight = darken(color, 0.7); // Darker
+    const cLeft = darken(color, 0.5);  // Medium
+
+    ctx.globalAlpha = opacity;
+
+    // Top Face
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y - TILE_H * 2);
+    ctx.lineTo(pos.x + TILE_W, pos.y - TILE_H);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.lineTo(pos.x - TILE_W, pos.y - TILE_H);
+    ctx.closePath();
+    ctx.fillStyle = cTop;
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.stroke();
+
+    // Right Face
+    ctx.beginPath();
+    ctx.moveTo(pos.x + TILE_W, pos.y - TILE_H);
+    ctx.lineTo(pos.x + TILE_W, pos.y + TILE_H);
+    ctx.lineTo(pos.x, pos.y + TILE_H * 2);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.closePath();
+    ctx.fillStyle = cRight;
+    ctx.fill();
+    ctx.stroke();
+
+    // Left Face
+    ctx.beginPath();
+    ctx.moveTo(pos.x - TILE_W, pos.y - TILE_H);
+    ctx.lineTo(pos.x - TILE_W, pos.y + TILE_H);
+    ctx.lineTo(pos.x, pos.y + TILE_H * 2);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.closePath();
+    ctx.fillStyle = cLeft;
+    ctx.fill();
+    ctx.stroke();
+
+    // Text Label
+    if (label) {
+        ctx.fillStyle = '#000';
+        ctx.font = '8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(label, pos.x, pos.y - TILE_H + 3);
+    }
+    
+    ctx.globalAlpha = 1.0;
+}
+
+function drawWireframe(x, y, z, w, h, d, color, offsetX, offsetY) {
+    // Draws a bounding box for the kernel
+    // Top-Left-Back
+    const p1 = iso(x, y, z + d -1, offsetX, offsetY); // Top
+    // Bottom-Right-Front
+    // We need 8 corners.
+    // Simplifying: iterate corners
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    
+    // Draw base rect
+    const corners = [
+        {x: x, y: y}, {x: x+w, y: y}, {x: x+w, y: y+h}, {x: x, y: y+h}
+    ];
+
+    // Helper to draw a generic 3D box wireframe is complex in Iso
+    // Let's just draw the top and bottom quads and connect
+    const topZ = z + d;
+    const botZ = z;
+
+    const drawQuad = (cz) => {
+        ctx.beginPath();
+        const start = iso(x, y, cz, offsetX, offsetY);
+        ctx.moveTo(start.x, start.y - TILE_H); // Adjust for cube center vs corner logic
+        // Actually, let's use the iso logic relative to grid coordinates
+        // Iso function centers on the tile. 
+        // Let's map corners manually.
+        const c1 = iso(x - 0.5, y - 0.5, cz, offsetX, offsetY);
+        const c2 = iso(x + w - 0.5, y - 0.5, cz, offsetX, offsetY);
+        const c3 = iso(x + w - 0.5, y + h - 0.5, cz, offsetX, offsetY);
+        const c4 = iso(x - 0.5, y + h - 0.5, cz, offsetX, offsetY);
+        
+        ctx.moveTo(c1.x, c1.y);
+        ctx.lineTo(c2.x, c2.y);
+        ctx.lineTo(c3.x, c3.y);
+        ctx.lineTo(c4.x, c4.y);
+        ctx.closePath();
+        ctx.stroke();
+        return [c1, c2, c3, c4];
+    };
+
+    const topPts = drawQuad(z + d - 1); // Top of the stack
+    const botPts = drawQuad(z - 1); // Bottom of the stack
+
+    // Vertical pillars
+    topPts.forEach((p, i) => {
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(botPts[i].x, botPts[i].y);
+        ctx.stroke();
+    });
+}
+
+function darken(hex, factor) {
+    // Simple hex darken
+    let r = parseInt(hex.substring(1,3), 16);
+    let g = parseInt(hex.substring(3,5), 16);
+    let b = parseInt(hex.substring(5,7), 16);
+    r = Math.floor(r * factor);
+    g = Math.floor(g * factor);
+    b = Math.floor(b * factor);
+    return `rgb(${r},${g},${b})`;
+}
+
+// --- VISUALIZATION SCENES ---
+
+// Process 1: Convolution
+let p1_step = 0;
+const p1_total_steps = 4; // 2x2 output means 4 positions
+let p1_timer = 0;
+
+function renderProcess1() {
+    // Panels
+    const xIn = RENDER_W * 0.25;
+    const xOut = RENDER_W * 0.75;
+    const yBase = RENDER_H * 0.6;
+
+    // 1. Draw Input Cube (3x3x3)
+    // We draw from bottom up, back to front to handle occlusion roughly
+    for (let z = 0; z < 3; z++) {
+        for (let y = 0; y < 3; y++) {
+            for (let x = 0; x < 3; x++) {
+                // Color code: Blueish for input
+                let val = ((x + y + z) % 3) * 0.2 + 0.2; // Dummy data
+                drawCube(x, y, z, '#55aaff', null, xIn, yBase);
+            }
+        }
+    }
+
+    // 2. Kernel Logic & Animation
+    // Kernel Size 2x2. Output Size 2x2.
+    // Positions: (0,0), (1,0), (0,1), (1,1)
+    const kX = p1_step % 2;
+    const kY = Math.floor(p1_step / 2);
+
+    // Draw Kernel Wireframe overlay on Input
+    // The kernel covers x to x+2, y to y+2, all z (0-3)
+    // Note: The iso function centers cubes. Wireframe needs to wrap them.
+    // We pass grid coordinates.
+    // Input is 0,1,2. Kernel at 0 covers 0,1.
+    drawWireframe(kX, kY, 0, 2, 2, 3, '#00ff00', xIn, yBase);
+
+    // 3. Draw Output Cube (Building up)
+    // 3 Filters, so output is 2x2x3
+    // We reveal output cubes based on the current step and previous steps
+    for (let z = 0; z < 3; z++) { // 3 Filters
+        for (let s = 0; s <= p1_step; s++) {
+             const ox = s % 2;
+             const oy = Math.floor(s / 2);
+             
+             // Draw the result
+             // Separated slightly (exploded) for clarity? No, stick to cube for now as per prompt "Cube of data"
+             // But prompt says "Exploded view". Let's offset the Z layers in the output.
+             const zOffset = z * 0.5; // Visual separation
+             
+             // Flash the current one
+             let color = '#ffaa55';
+             if (s === p1_step) color = '#ffffff'; 
+
+             drawCube(ox, oy, z + zOffset, color, null, xOut, yBase);
+        }
+    }
+
+    // Arrows
+    ctx.strokeStyle = '#ffb000';
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(xIn + 60, yBase - 50);
+    ctx.lineTo(xOut - 60, yBase - 50);
+    ctx.lineTo(xOut - 70, yBase - 60); // Arrow head roughly
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+    // Labels
+    ctx.fillStyle = '#ffb000';
+    ctx.font = '10px monospace';
+    ctx.fillText("INPUT (3x3x3)", xIn, yBase + 80);
+    ctx.fillText("OUTPUT (2x2x3)", xOut, yBase + 80);
+    ctx.fillText(`KERNEL POS: ${kX},${kY}`, xIn, yBase - 100);
+    ctx.fillText("CONVOLUTION OP", RENDER_W/2, yBase - 60);
+
+    // Animation Timer
+    p1_timer++;
+    if (p1_timer > 60) { // Change step every 60 frames
+        p1_step = (p1_step + 1) % 4;
+        p1_timer = 0;
+    }
+}
+
+// Process 2: Flattening
+let p2_timer = 0;
+// We visualize the unrolling of the 2x2x3 output
+function renderProcess2() {
+    const xSrc = RENDER_W * 0.25;
+    const xDest = RENDER_W * 0.75;
+    const yBase = RENDER_H * 0.6;
+
+    // Draw Source: 3 Layers of 2x2
+    // We explode them vertically significantly
+    const layers = 3;
+    const explodeGap = 3; 
+
+    // Animation: Move from Cube to Matrix
+    // Loop 0 to 100
+    const progress = (p2_timer % 150) / 100; // 0 to 1.5
+    const clampedProg = Math.min(progress, 1);
+
+    for (let z = 0; z < layers; z++) {
+        // Draw separate 2x2 grids
+        const zPos = z * explodeGap; 
+        
+        for (let y = 0; y < 2; y++) {
+            for (let x = 0; x < 2; x++) {
+                // Calculate Start Position (Isometric Cube)
+                const startPos = iso(x, y, zPos, xSrc, yBase);
+                
+                // Calculate End Position (Matrix)
+                // Matrix is 3 Rows (Channels) x 4 Cols (Features)
+                // Row = z, Col = y*2 + x
+                const colIndex = y * 2 + x;
+                const matrixX = xDest - 60 + (colIndex * 30);
+                const matrixY = yBase - 100 + (z * 30); // Row per channel
+
+                // Interpolate
+                const currX = startPos.x + (matrixX - startPos.x) * clampedProg;
+                const currY = startPos.y + (matrixY - startPos.y) * clampedProg;
+
+                // Color
+                const color = z === 0 ? '#ffaa55' : (z === 1 ? '#ffcc55' : '#ff8844');
+
+                if (clampedProg < 1) {
+                    // Draw Cube flying
+                    drawCube(0, 0, 0, color, null, currX, currY + TILE_H*1.5); // Reset iso offset math effectively
+                } else {
+                    // Draw Flat Square in Matrix
+                    ctx.fillStyle = color;
+                    ctx.fillRect(currX - 12, currY - 12, 24, 24);
+                    ctx.strokeStyle = '#000';
+                    ctx.strokeRect(currX - 12, currY - 12, 24, 24);
+                    
+                    // Values
+                    ctx.fillStyle = '#000';
+                    ctx.fillText(`${(z*4)+colIndex}`, currX, currY+3);
+                }
+            }
+        }
+        
+        // Label Rows
+        if (clampedProg >= 1) {
+            ctx.fillStyle = '#ffb000';
+            ctx.fillText(`CH ${z}`, xDest - 90, yBase - 100 + (z * 30) + 5);
+        }
+    }
+
+    // Labels
+    ctx.fillStyle = '#ffb000';
+    ctx.fillText("EXPLODED VOLUME (N x H x W)", xSrc, yBase + 80);
+    ctx.fillText("FLATTENED MATRIX (N x M)", xDest, yBase + 80);
+    
+    // Draw Arrow
+    if (progress < 1) {
+        ctx.beginPath();
+        ctx.moveTo(xSrc + 50, yBase - 50);
+        ctx.quadraticCurveTo(RENDER_W/2, yBase - 100, xDest - 80, yBase - 50);
+        ctx.strokeStyle = '#ffb000';
+        ctx.stroke();
+        ctx.fillText("RESHAPE", RENDER_W/2 - 20, yBase - 80);
+    }
+
+    p2_timer++;
+}
+
+
+// --- POST PROCESSING (DITHER) ---
+
+function applyDither() {
+    // Get pixel data
+    const imageData = ctx.getImageData(0, 0, RENDER_W, RENDER_H);
+    const data = imageData.data;
+    const w = RENDER_W;
+    
+    // Atkinson Dithering Kernel
+    //         *   1/8   1/8
+    // 1/8   1/8   1/8
+    //       1/8
+
+    for (let y = 0; y < RENDER_H; y++) {
+        for (let x = 0; x < w; x++) {
+            const i = (y * w + x) * 4;
+            
+            const oldR = data[i];
+            const oldG = data[i+1];
+            const oldB = data[i+2];
+            
+            // Convert to grayscale for thresholding logic, but keep color tint
+            // We want 1-bit color style: Black vs Theme Color
+            // Calculate luminance
+            const lum = (oldR * 0.299 + oldG * 0.587 + oldB * 0.114);
+            
+            // Threshold
+            const newLum = lum > 80 ? 255 : 0; // High contrast threshold
+            
+            const error = (lum - newLum) / 8;
+
+            // Apply color map
+            // If newLum is 255, we use the pixel's original color (quantized) or Theme Color
+            // Let's stick to true ditherpunk: 2 colors. Black and Amber.
+            // But to keep the chart readable (Blue/Green/Orange), we need a limited palette.
+            // Palette: Black (#000000) vs Color.
+            
+            // Simple approach: If > threshold, keep original color, else black.
+            // Then distribute error of luminance.
+            
+            data[i] = newLum ? oldR : 0;
+            data[i+1] = newLum ? oldG : 0;
+            data[i+2] = newLum ? oldB : 0;
+
+            // Distribute Error (Atkinson)
+            // Function to add error safely
+            const addErr = (dx, dy) => {
+                const ni = ((y + dy) * w + (x + dx)) * 4;
+                if (x + dx >= 0 && x + dx < w && y + dy < RENDER_H) {
+                    data[ni] += error;
+                    data[ni+1] += error;
+                    data[ni+2] += error;
+                }
+            };
+
+            addErr(1, 0);
+            addErr(2, 0);
+            addErr(-1, 1);
+            addErr(0, 1);
+            addErr(1, 1);
+            addErr(0, 2);
+        }
+    }
+    ctx.putImageData(imageData, 0, 0);
+}
+
+
+// --- MAIN LOOP ---
+
+function draw() {
+    // Clear Background
+    ctx.fillStyle = '#050505';
+    ctx.fillRect(0, 0, RENDER_W, RENDER_H);
+
+    // Draw Pattern Grid (Floor)
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 1;
+    // Simple perspective grid
+    // Skip for cleaner look or implement later
+
+    // Render Scene
+    if (currentMode === 1) renderProcess1();
+    else renderProcess2();
+
+    // Apply Post Processing
+    applyDither();
+
+    requestAnimationFrame(draw);
+}
+
+// --- CONTROLS ---
+
+function setMode(m) {
+    currentMode = m;
+    p1_timer = 0;
+    p2_timer = 0;
+    
+    document.getElementById('btn-proc1').className = m === 1 ? 'active' : '';
+    document.getElementById('btn-proc2').className = m === 2 ? 'active' : '';
+
+    const txt = document.getElementById('info-display');
+    if(m === 1) {
+        txt.innerHTML = `> MODE: CONVOLUTION<br>> INPUT: 3x3x3<br>> FILTERING...<br>> GENERATING 3 FEATURE MAPS<br><br><span class="blink">_</span>`;
+    } else {
+        txt.innerHTML = `> MODE: FLATTENING<br>> INPUT: FEATURE VOLUME<br>> OPERATION: UNROLL<br>> RESULT: (N x M) MATRIX<br>> READY FOR LOSS FUNC<br><br><span class="blink">_</span>`;
+    }
+}
+
+// Start
+draw();
+
+</script>
+</body>
+</html>

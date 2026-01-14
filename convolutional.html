@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Part II: Searching // Study Guide</title>
+<style>
+/*
+--- STYLE CONFIGURATION ---
+*/
+:root {
+--bg-color: #000000;
+--text-color: #00ff41;
+--accent-color: #00ff41;
+--dim-color: #003b00;
+--border-color: #00ff41;
+--font-main: 'Courier New', Courier, monospace;
+--font-header: 'Arial Black', Impact, sans-serif;
+}
+
+code
+Code
+download
+content_copy
+expand_less
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: var(--font-main);
+    line-height: 1.5;
+    overflow-x: hidden;
+}
+
+.dither-layer {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    z-index: -1;
+    background-image: radial-gradient(circle, #003b00 1px, transparent 1px);
+    background-size: 4px 4px;
+    opacity: 0.4;
+}
+
+.scanlines {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(to bottom, rgba(0, 255, 65, 0), rgba(0, 255, 65, 0) 50%, rgba(0, 20, 0, 0.2) 50%, rgba(0, 20, 0, 0.2));
+    background-size: 100% 4px;
+    pointer-events: none;
+    z-index: 9999;
+}
+
+.container {
+    max-width: 900px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 40px 20px;
+    border-left: 2px dashed var(--dim-color);
+    border-right: 2px dashed var(--dim-color);
+    background-color: rgba(0, 10, 0, 0.9);
+    min-height: 100vh;
+}
+
+h1 {
+    font-family: var(--font-header);
+    text-transform: uppercase;
+    font-size: 2.5rem;
+    border-bottom: 5px solid var(--accent-color);
+    margin-bottom: 40px;
+    color: var(--accent-color);
+    text-align: center;
+}
+
+strong { color: var(--accent-color); text-decoration: underline; }
+em { font-style: normal; color: #50c878; border-bottom: 1px dotted var(--dim-color); }
+
+/* ACCORDION STYLES */
+details.section {
+    margin-bottom: 15px;
+    border: 1px solid var(--dim-color);
+    background: #050505;
+}
+
+details.section > summary {
+    font-family: var(--font-main);
+    font-weight: bold;
+    padding: 12px;
+    background: #0a0a0a;
+    color: var(--text-color);
+    cursor: pointer;
+    list-style: none;
+    border-bottom: 1px solid transparent;
+    text-transform: uppercase;
+    font-size: 1.1rem;
+}
+
+details.section > summary:hover { background: var(--dim-color); color: var(--accent-color); }
+details.section[open] > summary {
+    border-bottom: 1px solid var(--dim-color);
+    background: #0f0f0f;
+    color: var(--accent-color);
+    text-shadow: 0px 0px 5px var(--accent-color);
+}
+
+.section-content { padding: 20px; }
+
+.subsection {
+    margin-bottom: 25px;
+    border-left: 4px solid var(--dim-color);
+    padding-left: 15px;
+}
+
+.subsection-title {
+    background: var(--dim-color);
+    color: var(--accent-color);
+    padding: 2px 6px;
+    font-weight: bold;
+    text-transform: uppercase;
+    display: inline-block;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+}
+
+p { margin-bottom: 12px; margin-top: 0; text-align: justify; }
+ul { padding-left: 20px; margin-bottom: 15px; }
+li { margin-bottom: 5px; }
+
+.code-block {
+    background: #020a02;
+    border: 1px dashed var(--dim-color);
+    padding: 10px;
+    margin: 10px 0;
+    font-family: 'Courier New', monospace;
+    color: var(--accent-color);
+    overflow-x: auto;
+    white-space: pre-wrap;
+}
+</style>
+</head>
+<body>
+
+<div class="dither-layer"></div>
+<div class="scanlines"></div>
+
+<div class="container">
+<h1>Convolutional Neural Networks</h1>
+
+<div class="part-content">
+    
+    <details class="section">
+        <summary>1. DIFFERENT TYPES OF CNNs </summary>
+        <div class="section-content">
+            <p><strong>CONVOLUTIONAL NEURAL NETWORKS</strong></p>
+            <p><strong>Spatial exploration based CNNs:</strong> Using different kernel sizes in order to explore different levels of visual features in input data.</p>
+            <p><strong>Depth Based CNNs:</strong> The depth here refers to the number of layers of the neural network. Shallow networks can only detect simple patterns like edges or curves. By stacking more layers, the network combines these simple patterns to recognize increasingly complex shapes—from textures and parts (like an eye or a wheel) to entire objects (like a face or a car).</p>
+            <p><strong>Width Based CNNs:</strong> Increasing the width (number of feature maps or channels) is useful when the model needs to capture a high diversity of fine-grained features at the same level of abstraction. While depth allows a model to understand what an object is (hierarchy), width determines how much detail the model can retain about the object.</p>
+            <p><strong>Multi-path-based CNNs:</strong> Deep layers are good at knowing what an object is but bad at knowing exactly where it is because the image size shrinks. Skip connections act as bridges, carrying high-resolution details from early layers directly to deeper ones. This allows the model to preserve fine details (like edges) while understanding the big picture.</p>
+            <p><strong>Example of Multi-path-based CNNs</strong></p>
+            <div class="subsection">
+                <span class="subsection-title">Aerospace</span>
+                <p>Satellite imagery involves analyzing vast landscapes where context and detail are equally important. For example, in disaster response after a hurricane, a model must understand the global context (a flooded region) while identifying specific local features (a washed-out bridge or a rooftop). Multi-path networks facilitate "multi-scale feature fusion." By connecting layers that represent different zoom levels, the model effectively sees the forest and the trees simultaneously. This allows for accurate land-use mapping (distinguishing similar-looking crops based on texture) and change detection, ensuring that small but critical changes on the ground are not ignored by the model’s high-level generalization.</p>
+            </div>
+            <p><strong>LAYER TYPES REVIEW</strong></p>
+            <p><strong>Convolution:</strong></p>
+            <p>You have a small grid of numbers (a "kernel") that slides across the image. At every stop, it performs a dot product; It asks: "How much does this patch match my specific pattern?" If the kernel is looking for a vertical line and finds one, the math returns a high number. If not, it returns a low one.</p>
+            <p><strong>Max Pooling:</strong></p>
+            <p>Invariance to translations.</p>
+            <p>Think of the previous layer (Convolution) as creating a "heat map" of where specific features are. If it was looking for a curve, it put a high number (like a 9) where it saw a perfect curve, and a low number (like a 0) where it didn't.</p>
+            <p><strong>Dense Layers</strong></p>
+            <p>Think of it as a funnel for reasoning. If you jump straight from raw evidence to the verdict, it's too chaotic. The first dense layer acts as a synthesizer: it combines scattered clues into high-level abstract concepts (like "upper loop" or "curved spine"). The second, smaller layer creates a bottleneck. By physically shrinking the layer size, we force the network to discard noise and compress those concepts into a concise summary before the final decision is delivered.</p>
+            <p>P.S. The typical number of dense layers is between 1 and 3.</p>
+        </div>
+    </details>
+
+    <details class="section">
+        <summary>2. ResNet Model</summary>
+        <div class="section-content">
+            <p><strong>ResNet Model</strong></p>
+            <p><strong>RESIDUAL CONVOLUTIONAL BLOCK</strong></p>
+            <p>Residuals are the features that differentiate your target.</p>
+            <p><strong>Backpropagation Pass:</strong> The skip connection enables incredibly efficient backpropagation allowing the model to easily identify exactly which features (like texture vs. shape) need to be adjusted</p>
+            <p><strong>THE PROCESS OF "ADDING"</strong></p>
+            <p>'Adding' is used to enable the model to differentiate important features faster</p>
+            <p>1. The Skip Connection (𝐱): "I will carry the original information (the baseline) for you."</p>
+            <p>2. The Conv Layer (𝐅(𝐱)): "Great, since you are holding the baseline, I will calculate only the new features (the residual/the difference)."</p>
+            <p>3. The Addition (+): Combines them.</p>
+            <ul>
+                <li>The Job is Easier (Forward Pass): It is much faster for the model to learn "Just add the tank" (the residual) than it is to learn "Reconstruct the entire forest and the tank." Because the job is simpler, the model learns to identify those important features (the tank) much quicker.</li>
+                <li>The Feedback is Faster (Backward Pass): Because of the addition, the "Teacher" (the error signal) can shout directly at the early layers to tell them what they got wrong, without the message getting garbled by 50 layers in between.</li>
+            </ul>
+            <p><strong>CONVOLUTION VS IDENTITY BLOCK</strong></p>
+            <p>Convolutional block = shrink data,</p>
+            <p>Identity block = inspect data</p>
+            <p><strong>Identity Block</strong></p>
+            <p>The input has the same height, width, and number of channels as the output.</p>
+            <ul>
+                <li>When to use: When you want to make the network "deeper" without shrinking the image size or changing the feature count.</li>
+            </ul>
+            <p><strong>Convolutional Block</strong></p>
+            <p>The input has different dimensions than the output (usually the image gets smaller, or the number of filters/channels doubles).</p>
+            <ul>
+                <li>When to use: When you need to downsample the image (reduce resolution) or increase the number of features (channels) to capture more complex abstract concepts.</li>
+            </ul>
+            <p><strong>EXAMPLE FOR WHEN TO USE IDENTITY VS CONVOLUTIONAL BLOCKS</strong></p>
+            <div class="subsection">
+                <span class="subsection-title">Infrastructure (Pavement Crack Detection)</span>
+                <p>Automated road inspection using high-speed camera footage. Application:</p>
+                <ul>
+                    <li><strong>Convolutional Block:</strong> You use this early in the network to aggressively downsample the massive 4K road images and double the channel depth (e.g., from 64 to 128 filters). The model shifts from looking at "gray pixels" to looking for "lines and gaps."</li>
+                    <li><strong>Identity Block:</strong> Once you have a feature map of potential cracks, you stack multiple Identity blocks. These layers refine the understanding of "crack vs. tar seal" without shrinking the map further, ensuring you don't lose the spatial location of the crack which is needed for maintenance crews.</li>
+                </ul>
+            </div>
+        </div>
+    </details>
+
+    <details class="section">
+        <summary>3. DenseNet Model</summary>
+        <div class="section-content">
+            <p><strong>DenseNet Model:</strong></p>
+            <p>"In DenseNet, skip connections are used via concatenation to hand a layer the collective feature history of the block. This ensures that:</p>
+            <p>1. The model has access to low-level features (edges/textures found in early layers) without them being 'washed out' or abstracted away by subsequent convolutions.</p>
+            <p>2. The model becomes highly parameter-efficient because it can reuse these earlier features rather than regenerating them, creating a strong gradient flow from the end of the network back to the start."</p>
+            <p><strong>THE HOW:</strong></p>
+            <p>In DenseNet, a layer (e.g., Layer 10) receives the collective feature history of every preceding layer (Input + Layers 1–9), not just the previous one. This enables Feature Reuse: later layers access low-level features (like edges) and high-level features (like shapes) simultaneously. The network need not relearn an "edge" deep in the model, as Layer 1 passes that specific finding directly forward.</p>
+            <p>Critically, DenseNet preserves this data via concatenation rather than addition. In ResNet, adding features is like mixing red and blue paint into purple—the original inputs are blended and inseparable. DenseNet's concatenation is like stapling a red index card (input) next to a blue one (processing); the next layer sees both distinctly. Because features remain separate in the depth dimension, the model can explicitly choose between the "granular" details from early layers or the "abstract" concepts from later ones, ensuring no information is "washed out."</p>
+        </div>
+    </details>
+
+    <details class="section">
+        <summary>4. CNN-LSTM</summary>
+        <div class="section-content">
+            <p><strong>CNN-LSTM</strong></p>
+            <p>How the CNN data gets turned into sequential data that the LSTM can process.</p>
+            <p>1. Time-Distributed CNN: The model does not process the sequence all at once. Instead, it applies the same CNN layer to Frame 1, then Frame 2, and so on, independently.</p>
+            <p>2. Flattening: For each frame, the CNN condenses the complex image data into a single 1D "feature vector" (number column).</p>
+            <p>3. Sequence Formation: If your input has 20 frames, the CNN outputs 20 distinct feature vectors.</p>
+            <p>4. The Hand-off: These 20 vectors are lined up in chronological order. This ordered list is what the LSTM ingests. The LSTM reads the vector for Time 1, updates its memory, then reads Time 2, allowing it to understand the flow of time.</p>
+            <p><strong>EXAMPLE</strong></p>
+            <div class="subsection">
+                <span class="subsection-title">Defense: Underwater Mine and Object Detection (Sonar)</span>
+                <p>Use Case: Identifying mines, submarines, or debris in side-scan sonar imagery.</p>
+                <p>How it works: Sonar data is noisy and difficult to interpret due to the complex scattering of sound waves underwater.</p>
+                <ul>
+                    <li><strong>The CNN Component:</strong> Acts as a feature extractor on the raw sonar frames.it filters out noise (sea floor reverberation) and highlights spatial shapes that resemble man-made objects (edges, metallic textures, and shadows).</li>
+                    <li><strong>The LSTM Component:</strong> Analyzes the sequence of these processed sonar pings as the vessel moves. Since a single ping might be ambiguous, the LSTM uses the temporal context—how the object's shadow and highlight shift across multiple frames—to confirm the object's classification.</li>
+                </ul>
+                <p>Impact: This hybrid approach significantly reduces false positives caused by rocks or coral. It allows Autonomous Underwater Vehicles (AUVs) to clear minefields more safely and autonomously, keeping naval personnel out of hazardous zones.</p>
+            </div>
+        </div>
+    </details>
+
+</div>
+</div>
+
+</body>
+</html>
