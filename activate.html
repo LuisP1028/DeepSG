@@ -153,58 +153,90 @@ li { margin-bottom: 5px; }
         </div>
     </details>
 
-    <!-- Sigmoid Section -->
-    <details class="section">
-        <summary>Sigmoid</summary>
-        <div class="section-content">
-            <p>σ(x) = 1 / (1 + e⁻ˣ)</p>
-            <p>Output range: [0, 1]</p>
-            <p>Historically used in output layers for binary classification (interpretable as probability).</p>
-            <p>Major drawbacks:</p>
-            <ul>
-                <li><strong>Vanishing gradient</strong>: gradients near 0 or 1 become tiny → slow or stalled learning in early layers.</li>
-                <li>Outputs are not zero-centered → can cause zig-zagging updates.</li>
-            </ul>
-        </div>
-    </details>
+<!-- Sigmoid Section -->
+<details class="section">
+    <summary>
+        Sigmoid
+        <button class="eye-btn" onclick="event.preventDefault(); const v = document.querySelector('.retro-viewport'); v.querySelector('iframe').src = 'Activations/sigmoid.html'; v.classList.add('active');">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+        </button>
+    </summary>
+    <div class="section-content">
+        <p>σ(x) = 1 / (1 + e⁻ˣ)</p>
+        <p>Output range: [0, 1]</p>
+        <p>Historically used in output layers for binary classification (interpretable as probability).</p>
+        <p>Major drawbacks:</p>
+        <ul>
+            <li><strong>Vanishing gradient</strong>: gradients near 0 or 1 become tiny → slow or stalled learning in early layers.</li>
+            <li>Outputs are not zero-centered → can cause zig-zagging updates.</li>
+        </ul>
+    </div>
+</details>
 
-    <!-- Tanh Section -->
-    <details class="section">
-        <summary>Tanh (Hyperbolic Tangent)</summary>
-        <div class="section-content">
-            <p>tanh(x) = (eˣ - e⁻ˣ) / (eˣ + e⁻ˣ)</p>
-            <p>Output range: [-1, 1]</p>
-            <p>Zero-centered (better than sigmoid for hidden layers) → gradients more likely to point in useful directions.</p>
-            <p>Still suffers from <strong>vanishing gradient</strong> problem for large |x|.</p>
-        </div>
-    </details>
+<!-- Tanh Section -->
+<details class="section">
+    <summary>
+        Tanh (Hyperbolic Tangent)
+        <button class="eye-btn" onclick="event.preventDefault(); const v = document.querySelector('.retro-viewport'); v.querySelector('iframe').src = 'Activations/tanH.html'; v.classList.add('active');">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+        </button>
+    </summary>
+    <div class="section-content">
+        <p>tanh(x) = (eˣ - e⁻ˣ) / (eˣ + e⁻ˣ)</p>
+        <p>Output range: [-1, 1]</p>
+        <p>Zero-centered (better than sigmoid for hidden layers) → gradients more likely to point in useful directions.</p>
+        <p>Still suffers from <strong>vanishing gradient</strong> problem for large |x|.</p>
+    </div>
+</details>
 
-    <!-- ReLU Section -->
-    <details class="section">
-        <summary>ReLU (Rectified Linear Unit)</summary>
-        <div class="section-content">
-            <p>f(x) = max(0, x)</p>
-            <p>Output range: [0, ∞)</p>
-            <p>Advantages:</p>
-            <ul>
-                <li>Very fast to compute (simple thresholding).</li>
-                <li>No vanishing gradient for positive values → faster convergence in practice.</li>
-                <li>Promotes sparsity (many neurons output 0) → efficient computation & regularization effect.</li>
-            </ul>
-            <p>Main issue: <strong>Dying ReLU</strong> problem — neurons can get stuck outputting 0 forever if they receive only negative inputs (gradient = 0).</p>
-        </div>
-    </details>
+<!-- ReLU Section -->
+<details class="section">
+    <summary>
+        ReLU (Rectified Linear Unit)
+        <button class="eye-btn" onclick="event.preventDefault(); const v = document.querySelector('.retro-viewport'); v.querySelector('iframe').src = 'Activations/ReLU.html'; v.classList.add('active');">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+        </button>
+    </summary>
+    <div class="section-content">
+        <p>f(x) = max(0, x)</p>
+        <p>Output range: [0, ∞)</p>
+        <p>Advantages:</p>
+        <ul>
+            <li>Very fast to compute (simple thresholding).</li>
+            <li>No vanishing gradient for positive values → faster convergence in practice.</li>
+            <li>Promotes sparsity (many neurons output 0) → efficient computation & regularization effect.</li>
+        </ul>
+        <p>Main issue: <strong>Dying ReLU</strong> problem — neurons can get stuck outputting 0 forever if they receive only negative inputs (gradient = 0).</p>
+    </div>
+</details>
 
-    <!-- Leaky ReLU Section -->
-    <details class="section">
-        <summary>Leaky ReLU</summary>
-        <div class="section-content">
-            <p>f(x) = max(αx, x)   where α is a small constant (typically 0.01)</p>
-            <p>Output range: (-∞, ∞)</p>
-            <p>Fixes dying ReLU by allowing a small, non-zero gradient when x < 0 → keeps neurons "alive" and learning even when mostly inactive.</p>
-            <p>Variants: Parametric ReLU (PReLU — α is learned), ELU, GELU, Swish, etc., offer further improvements in some cases.</p>
-        </div>
-    </details>
+<!-- Leaky ReLU Section -->
+<details class="section">
+    <summary>
+        Leaky ReLU
+        <button class="eye-btn" onclick="event.preventDefault(); const v = document.querySelector('.retro-viewport'); v.querySelector('iframe').src = 'Activations/LeakyReLU.html'; v.classList.add('active');">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+        </button>
+    </summary>
+    <div class="section-content">
+        <p>f(x) = max(αx, x)   where α is a small constant (typically 0.01)</p>
+        <p>Output range: (-∞, ∞)</p>
+        <p>Fixes dying ReLU by allowing a small, non-zero gradient when x < 0 → keeps neurons "alive" and learning even when mostly inactive.</p>
+        <p>Variants: Parametric ReLU (PReLU — α is learned), ELU, GELU, Swish, etc., offer further improvements in some cases.</p>
+    </div>
+</details>
 
     <!-- Summary Section -->
     <details class="section">
