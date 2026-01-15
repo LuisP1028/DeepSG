@@ -155,12 +155,35 @@ li { margin-bottom: 5px; }
         <summary>1. DIFFERENT TYPES OF CNNs </summary>
         <div class="section-content">
             <p><strong>CONVOLUTIONAL NEURAL NETWORKS</strong></p>
-            <p><strong>Spatial exploration based CNNs:</strong> Using different kernel sizes in order to explore different levels of visual features in input data.</p>
-            <p><strong>Depth Based CNNs:</strong> The depth here refers to the number of layers of the neural network. Shallow networks can only detect simple patterns like edges or curves. By stacking more layers, the network combines these simple patterns to recognize increasingly complex shapes—from textures and parts (like an eye or a wheel) to entire objects (like a face or a car).</p>
-            <p><strong>Width Based CNNs:</strong> Increasing the width (number of feature maps or channels) is useful when the model needs to capture a high diversity of fine-grained features at the same level of abstraction. While depth allows a model to understand what an object is (hierarchy), width determines how much detail the model can retain about the object.</p>
-            <p><strong>Multi-path-based CNNs:</strong> Deep layers are good at knowing what an object is but bad at knowing exactly where it is because the image size shrinks. Skip connections act as bridges, carrying high-resolution details from early layers directly to deeper ones. This allows the model to preserve fine details (like edges) while understanding the big picture.</p>
+            
+            <p><strong>Spatial exploration based CNNs: 
+                <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='CNN/spatial_cnn.html'; v.classList.add('active');">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
+                </button>
+            </strong> Using different kernel sizes in order to explore different levels of visual features in input data.</p>
+            
+            <p><strong>Depth Based CNNs:
+                <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='CNN/depth_cnn.html'; v.classList.add('active');">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
+                </button>
+            </strong> The depth here refers to the number of layers of the neural network. Shallow networks can only detect simple patterns like edges or curves. By stacking more layers, the network combines these simple patterns to recognize increasingly complex shapes—from textures and parts (like an eye or a wheel) to entire objects (like a face or a car).</p>
+            
+            <p><strong>Width Based CNNs:
+                <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='CNN/width_cnn.html'; v.classList.add('active');">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
+                </button>
+            </strong> Increasing the width (number of feature maps or channels) is useful when the model needs to capture a high diversity of fine-grained features at the same level of abstraction. While depth allows a model to understand what an object is (hierarchy), width determines how much detail the model can retain about the object.</p>
+            
+            <p><strong>Multi-path-based CNNs:
+                <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='CNN/multipath_cnn.html'; v.classList.add('active');">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
+                </button>
+            </strong> Deep layers are good at knowing what an object is but bad at knowing exactly where it is because the image size shrinks. Skip connections act as bridges, carrying high-resolution details from early layers directly to deeper ones. This allows the model to preserve fine details (like edges) while understanding the big picture.</p>
+            
             <p><strong>Example of Multi-path-based CNNs</strong></p>
-            <div class="subsection">
+            <div class="subsection"></div>
+        </div>
+    </details>
                 <span class="subsection-title">Aerospace</span>
                 <p>Satellite imagery involves analyzing vast landscapes where context and detail are equally important. For example, in disaster response after a hurricane, a model must understand the global context (a flooded region) while identifying specific local features (a washed-out bridge or a rooftop). Multi-path networks facilitate "multi-scale feature fusion." By connecting layers that represent different zoom levels, the model effectively sees the forest and the trees simultaneously. This allows for accurate land-use mapping (distinguishing similar-looking crops based on texture) and change detection, ensuring that small but critical changes on the ground are not ignored by the model’s high-level generalization.</p>
             </div>
@@ -179,7 +202,11 @@ li { margin-bottom: 5px; }
     <details class="section">
         <summary>2. ResNet Model</summary>
         <div class="section-content">
-            <p><strong>ResNet Model</strong></p>
+            <p><strong>ResNet Model
+                <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='CNN/resnet.html'; v.classList.add('active');">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
+                </button>
+            </strong></p>
             <p><strong>RESIDUAL CONVOLUTIONAL BLOCK</strong></p>
             <p>Residuals are the features that differentiate your target.</p>
             <p><strong>Backpropagation Pass:</strong> The skip connection enables incredibly efficient backpropagation allowing the model to easily identify exactly which features (like texture vs. shape) need to be adjusted</p>
@@ -188,7 +215,9 @@ li { margin-bottom: 5px; }
             <p>1. The Skip Connection (𝐱): "I will carry the original information (the baseline) for you."</p>
             <p>2. The Conv Layer (𝐅(𝐱)): "Great, since you are holding the baseline, I will calculate only the new features (the residual/the difference)."</p>
             <p>3. The Addition (+): Combines them.</p>
-            <ul>
+            <ul></ul>
+        </div>
+    </details>
                 <li>The Job is Easier (Forward Pass): It is much faster for the model to learn "Just add the tank" (the residual) than it is to learn "Reconstruct the entire forest and the tank." Because the job is simpler, the model learns to identify those important features (the tank) much quicker.</li>
                 <li>The Feedback is Faster (Backward Pass): Because of the addition, the "Teacher" (the error signal) can shout directly at the early layers to tell them what they got wrong, without the message getting garbled by 50 layers in between.</li>
             </ul>
@@ -220,7 +249,11 @@ li { margin-bottom: 5px; }
     <details class="section">
         <summary>3. DenseNet Model</summary>
         <div class="section-content">
-            <p><strong>DenseNet Model:</strong></p>
+            <p><strong>DenseNet Model:
+                <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='CNN/Densenet.html'; v.classList.add('active');">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
+                </button>
+            </strong></p>
             <p>"In DenseNet, skip connections are used via concatenation to hand a layer the collective feature history of the block. This ensures that:</p>
             <p>1. The model has access to low-level features (edges/textures found in early layers) without them being 'washed out' or abstracted away by subsequent convolutions.</p>
             <p>2. The model becomes highly parameter-efficient because it can reuse these earlier features rather than regenerating them, creating a strong gradient flow from the end of the network back to the start."</p>
@@ -233,7 +266,11 @@ li { margin-bottom: 5px; }
     <details class="section">
         <summary>4. CNN-LSTM</summary>
         <div class="section-content">
-            <p><strong>CNN-LSTM</strong></p>
+            <p><strong>CNN-LSTM
+                <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='CNN/CNN_LSTM.html'; v.classList.add('active');">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
+                </button>
+            </strong></p>
             <p>How the CNN data gets turned into sequential data that the LSTM can process.</p>
             <p>1. Time-Distributed CNN: The model does not process the sequence all at once. Instead, it applies the same CNN layer to Frame 1, then Frame 2, and so on, independently.</p>
             <p>2. Flattening: For each frame, the CNN condenses the complex image data into a single 1D "feature vector" (number column).</p>
