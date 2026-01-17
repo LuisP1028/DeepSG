@@ -71,6 +71,80 @@ h1 {
 strong { color: var(--accent-color); text-decoration: underline; }
 em { font-style: normal; color: #50c878; border-bottom: 1px dotted var(--dim-color); }
 
+/* --- UI COMPONENT: EYE BUTTON (UPDATED) --- */
+.eye-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--accent-color); 
+    padding: 0 8px; 
+    vertical-align: middle;
+    transition: color 0.2s, text-shadow 0.2s;
+    
+    /* FIX: Display inline to sit next to text */
+    display: inline-block; 
+    
+    /* FIX: Z-Index ensures it sits ABOVE the scanlines overlay */
+    position: relative;
+    z-index: 10001; 
+}
+
+.eye-btn:hover {
+    color: #fff;
+    text-shadow: 0 0 8px var(--accent-color);
+}
+
+.eye-btn svg {
+    display: block; 
+}
+
+/* --- UI COMPONENT: RETRO VIEWPORT (MODAL) --- */
+.retro-viewport {
+    display: none; 
+    position: fixed;
+    top: 0; 
+    left: 0; 
+    width: 100vw; 
+    height: 100vh;
+    background-color: rgba(0, 5, 0, 0.95);
+    z-index: 10002; /* Must be highest */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+}
+
+.retro-viewport.active {
+    display: flex; 
+}
+
+.retro-viewport iframe {
+    width: 85%;
+    height: 80%;
+    border: 2px solid var(--accent-color);
+    background: #000;
+    box-shadow: 0 0 20px var(--dim-color), inset 0 0 20px rgba(0, 50, 0, 0.5);
+}
+
+.retro-viewport .close-btn {
+    margin-top: 15px;
+    background: #000;
+    color: var(--accent-color);
+    border: 1px solid var(--accent-color);
+    padding: 10px 20px;
+    font-family: var(--font-main);
+    text-transform: uppercase;
+    cursor: pointer;
+    font-weight: bold;
+    box-shadow: 0 0 5px var(--dim-color);
+}
+
+.retro-viewport .close-btn:hover {
+    background: var(--dim-color);
+    color: #fff;
+    box-shadow: 0 0 10px var(--accent-color);
+}
+
 /* ACCORDION STYLES */
 details.section {
     margin-bottom: 15px;
@@ -89,6 +163,7 @@ details.section > summary {
     border-bottom: 1px solid transparent;
     text-transform: uppercase;
     font-size: 1.1rem;
+    position: relative;
 }
 
 details.section > summary:hover { background: var(--dim-color); color: var(--accent-color); }
@@ -101,7 +176,7 @@ details.section[open] > summary {
 
 .section-content { padding: 20px; }
 
-/* Kept for legacy support, though subsections are now top-level sections */
+/* Kept for legacy support */
 .subsection {
     margin-bottom: 25px;
     border-left: 4px solid var(--dim-color);
@@ -162,7 +237,12 @@ li { margin-bottom: 5px; }
 
     <!-- Batch GD -->
     <details class="section">
-        <summary>Batch Gradient Descent</summary>
+        <summary>
+            Batch Gradient Descent
+            <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='Optimizations/Batch.html'; v.classList.add('active');">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
+            </button>
+        </summary>
         <div class="section-content">
             <p>Most thorough but often impractical: compute gradient over the <strong>entire</strong> training dataset before one parameter update. Very accurate direction, smooth convergence, but slow and memory-heavy for large datasets.</p>
         </div>
@@ -170,7 +250,12 @@ li { margin-bottom: 5px; }
 
     <!-- SGD -->
     <details class="section">
-        <summary>Stochastic Gradient Descent (SGD)</summary>
+        <summary>
+            Stochastic Gradient Descent (SGD)
+            <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='Optimizations/SGD.html'; v.classList.add('active');">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
+            </button>
+        </summary>
         <div class="section-content">
             <p>Extreme opposite: process <strong>one</strong> training example at a time, compute its loss/gradient, update parameters immediately. Fast, low memory, noisy updates (helps escape local minima), but oscillates around minimum.</p>
         </div>
@@ -178,7 +263,12 @@ li { margin-bottom: 5px; }
 
     <!-- Mini-Batch -->
     <details class="section">
-        <summary>Mini-Batch Gradient Descent</summary>
+        <summary>
+            Mini-Batch Gradient Descent
+            <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='Optimizations/MiniBatch.html'; v.classList.add('active');">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
+            </button>
+        </summary>
         <div class="section-content">
             <p>Best practical compromise (most common in deep learning): use a small batch (e.g., 32–256 examples). Average gradient over the batch → one update. Balances noise/speed/accuracy; enables efficient vectorization/GPU use.</p>
         </div>
@@ -186,7 +276,12 @@ li { margin-bottom: 5px; }
 
     <!-- AdaGrad -->
     <details class="section">
-        <summary>AdaGrad (Adaptive Gradient)</summary>
+        <summary>
+            AdaGrad (Adaptive Gradient)
+            <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='Optimizations/AdaGrad.html'; v.classList.add('active');">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
+            </button>
+        </summary>
         <div class="section-content">
             <p>Adapts learning rate <strong>per parameter</strong>: parameters with large gradients get smaller updates (rare features), infrequent ones get larger. Accumulates squared gradients indefinitely → learning rate decays to near-zero → can "freeze" learning prematurely.</p>
         </div>
@@ -194,7 +289,12 @@ li { margin-bottom: 5px; }
 
     <!-- AdaDelta -->
     <details class="section">
-        <summary>AdaDelta</summary>
+        <summary>
+            AdaDelta
+            <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='Optimizations/AdaDelta.html'; v.classList.add('active');">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
+            </button>
+        </summary>
         <div class="section-content">
             <p>Fixes AdaGrad's aggressive decay: uses decaying average (sliding window) of squared gradients instead of infinite accumulation. Also tracks history of parameter updates (Δw) to replace manual learning rate entirely. No global η needed.</p>
         </div>
@@ -202,7 +302,12 @@ li { margin-bottom: 5px; }
 
     <!-- Adam -->
     <details class="section">
-        <summary>Adam (Adaptive Moment Estimation)</summary>
+        <summary>
+            Adam (Adaptive Moment Estimation)
+            <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='Optimizations/Adam.html'; v.classList.add('active');">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
+            </button>
+        </summary>
         <div class="section-content">
             <p>Default go-to optimizer in deep learning. Combines momentum + per-parameter adaptive rates. Maintains two moving averages per parameter:</p>
             <ul>
@@ -239,5 +344,18 @@ li { margin-bottom: 5px; }
 
 </div>
 </div>
+
+<!-- RETRO VIEWPORT OVERLAY -->
+<div class="retro-viewport">
+    <iframe src="" title="Visualization" style="border:none;"></iframe>
+    <button class="close-btn" onclick="
+        const v = this.parentElement; 
+        v.classList.remove('active'); 
+        setTimeout(() => v.querySelector('iframe').src = '', 200);
+    ">
+        [ TERMINATE VISUALIZATION ]
+    </button>
+</div>
+
 </body>
 </html>
