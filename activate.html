@@ -71,6 +71,79 @@ h1 {
 strong { color: var(--accent-color); text-decoration: underline; }
 em { font-style: normal; color: #50c878; border-bottom: 1px dotted var(--dim-color); }
 
+/* --- UI COMPONENT: EYE BUTTON (UPDATED) --- */
+.eye-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    /* FIX: Changed from --dim-color to --accent-color for visibility */
+    color: var(--accent-color); 
+    padding: 0 10px;
+    vertical-align: middle;
+    transition: color 0.2s, text-shadow 0.2s;
+    float: right; 
+    
+    /* FIX: Z-Index ensures it sits ABOVE the scanlines overlay */
+    position: relative;
+    z-index: 10001; 
+}
+
+.eye-btn:hover {
+    color: #fff;
+    text-shadow: 0 0 8px var(--accent-color);
+}
+
+.eye-btn svg {
+    display: block; 
+}
+
+/* --- UI COMPONENT: RETRO VIEWPORT (MODAL) --- */
+.retro-viewport {
+    display: none; 
+    position: fixed;
+    top: 0; 
+    left: 0; 
+    width: 100vw; 
+    height: 100vh;
+    background-color: rgba(0, 5, 0, 0.95);
+    z-index: 10002; /* Must be highest */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+}
+
+.retro-viewport.active {
+    display: flex; 
+}
+
+.retro-viewport iframe {
+    width: 85%;
+    height: 80%;
+    border: 2px solid var(--accent-color);
+    background: #000;
+    box-shadow: 0 0 20px var(--dim-color), inset 0 0 20px rgba(0, 50, 0, 0.5);
+}
+
+.retro-viewport .close-btn {
+    margin-top: 15px;
+    background: #000;
+    color: var(--accent-color);
+    border: 1px solid var(--accent-color);
+    padding: 10px 20px;
+    font-family: var(--font-main);
+    text-transform: uppercase;
+    cursor: pointer;
+    font-weight: bold;
+    box-shadow: 0 0 5px var(--dim-color);
+}
+
+.retro-viewport .close-btn:hover {
+    background: var(--dim-color);
+    color: #fff;
+    box-shadow: 0 0 10px var(--accent-color);
+}
+
 /* ACCORDION STYLES */
 details.section {
     margin-bottom: 15px;
@@ -89,6 +162,7 @@ details.section > summary {
     border-bottom: 1px solid transparent;
     text-transform: uppercase;
     font-size: 1.1rem;
+    position: relative; /* Context for z-index */
 }
 
 details.section > summary:hover { background: var(--dim-color); color: var(--accent-color); }
@@ -101,7 +175,7 @@ details.section[open] > summary {
 
 .section-content { padding: 20px; }
 
-/* Kept for legacy compatibility, though subsections are now top-level sections */
+/* Kept for legacy compatibility */
 .subsection {
     margin-bottom: 25px;
     border-left: 4px solid var(--dim-color);
@@ -252,6 +326,18 @@ li { margin-bottom: 5px; }
     </details>
 
 </div>
+</div>
+
+<!-- RETRO VIEWPORT OVERLAY (Injected) -->
+<div class="retro-viewport">
+    <iframe src="" title="Visualization" style="border:none;"></iframe>
+    <button class="close-btn" onclick="
+        const v = this.parentElement; 
+        v.classList.remove('active'); 
+        setTimeout(() => v.querySelector('iframe').src = '', 200);
+    ">
+        [ TERMINATE VISUALIZATION ]
+    </button>
 </div>
 
 </body>
