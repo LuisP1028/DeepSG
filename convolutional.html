@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -19,11 +18,6 @@
 --font-header: 'Arial Black', Impact, sans-serif;
 }
 
-code
-Code
-download
-content_copy
-expand_less
 * { box-sizing: border-box; }
 
 body {
@@ -78,6 +72,79 @@ h1 {
 strong { color: var(--accent-color); text-decoration: underline; }
 em { font-style: normal; color: #50c878; border-bottom: 1px dotted var(--dim-color); }
 
+/* --- UI COMPONENT: EYE BUTTON (UPDATED) --- */
+.eye-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--accent-color); 
+    padding: 0 8px; /* Slightly reduced padding */
+    vertical-align: middle;
+    transition: color 0.2s, text-shadow 0.2s;
+    
+    /* FIX: Display inline instead of float:right to sit next to text */
+    display: inline-block; 
+    
+    position: relative;
+    z-index: 10001; 
+}
+
+.eye-btn:hover {
+    color: #fff;
+    text-shadow: 0 0 8px var(--accent-color);
+}
+
+.eye-btn svg {
+    display: block; 
+}
+
+/* --- UI COMPONENT: RETRO VIEWPORT (MODAL) --- */
+.retro-viewport {
+    display: none; 
+    position: fixed;
+    top: 0; 
+    left: 0; 
+    width: 100vw; 
+    height: 100vh;
+    background-color: rgba(0, 5, 0, 0.95);
+    z-index: 10002; 
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+}
+
+.retro-viewport.active {
+    display: flex; 
+}
+
+.retro-viewport iframe {
+    width: 85%;
+    height: 80%;
+    border: 2px solid var(--accent-color);
+    background: #000;
+    box-shadow: 0 0 20px var(--dim-color), inset 0 0 20px rgba(0, 50, 0, 0.5);
+}
+
+.retro-viewport .close-btn {
+    margin-top: 15px;
+    background: #000;
+    color: var(--accent-color);
+    border: 1px solid var(--accent-color);
+    padding: 10px 20px;
+    font-family: var(--font-main);
+    text-transform: uppercase;
+    cursor: pointer;
+    font-weight: bold;
+    box-shadow: 0 0 5px var(--dim-color);
+}
+
+.retro-viewport .close-btn:hover {
+    background: var(--dim-color);
+    color: #fff;
+    box-shadow: 0 0 10px var(--accent-color);
+}
+
 /* ACCORDION STYLES */
 details.section {
     margin-bottom: 15px;
@@ -96,6 +163,7 @@ details.section > summary {
     border-bottom: 1px solid transparent;
     text-transform: uppercase;
     font-size: 1.1rem;
+    position: relative;
 }
 
 details.section > summary:hover { background: var(--dim-color); color: var(--accent-color); }
@@ -156,7 +224,7 @@ li { margin-bottom: 5px; }
         <div class="section-content">
             <p><strong>CONVOLUTIONAL NEURAL NETWORKS</strong></p>
             
-            <p><strong>Spatial exploration based CNNs: 
+            <p><strong>Spatial exploration based CNNs:
                 <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='CNN/spatial_cnn.html'; v.classList.add('active');">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
                 </button>
@@ -181,9 +249,7 @@ li { margin-bottom: 5px; }
             </strong> Deep layers are good at knowing what an object is but bad at knowing exactly where it is because the image size shrinks. Skip connections act as bridges, carrying high-resolution details from early layers directly to deeper ones. This allows the model to preserve fine details (like edges) while understanding the big picture.</p>
             
             <p><strong>Example of Multi-path-based CNNs</strong></p>
-            <div class="subsection"></div>
-        </div>
-    </details>
+            <div class="subsection">
                 <span class="subsection-title">Aerospace</span>
                 <p>Satellite imagery involves analyzing vast landscapes where context and detail are equally important. For example, in disaster response after a hurricane, a model must understand the global context (a flooded region) while identifying specific local features (a washed-out bridge or a rooftop). Multi-path networks facilitate "multi-scale feature fusion." By connecting layers that represent different zoom levels, the model effectively sees the forest and the trees simultaneously. This allows for accurate land-use mapping (distinguishing similar-looking crops based on texture) and change detection, ensuring that small but critical changes on the ground are not ignored by the model’s high-level generalization.</p>
             </div>
@@ -215,9 +281,7 @@ li { margin-bottom: 5px; }
             <p>1. The Skip Connection (𝐱): "I will carry the original information (the baseline) for you."</p>
             <p>2. The Conv Layer (𝐅(𝐱)): "Great, since you are holding the baseline, I will calculate only the new features (the residual/the difference)."</p>
             <p>3. The Addition (+): Combines them.</p>
-            <ul></ul>
-        </div>
-    </details>
+            <ul>
                 <li>The Job is Easier (Forward Pass): It is much faster for the model to learn "Just add the tank" (the residual) than it is to learn "Reconstruct the entire forest and the tank." Because the job is simpler, the model learns to identify those important features (the tank) much quicker.</li>
                 <li>The Feedback is Faster (Backward Pass): Because of the addition, the "Teacher" (the error signal) can shout directly at the early layers to tell them what they got wrong, without the message getting garbled by 50 layers in between.</li>
             </ul>
@@ -291,6 +355,18 @@ li { margin-bottom: 5px; }
     </details>
 
 </div>
+</div>
+
+<!-- RETRO VIEWPORT OVERLAY -->
+<div class="retro-viewport">
+    <iframe src="" title="Visualization" style="border:none;"></iframe>
+    <button class="close-btn" onclick="
+        const v = this.parentElement; 
+        v.classList.remove('active'); 
+        setTimeout(() => v.querySelector('iframe').src = '', 200);
+    ">
+        [ TERMINATE VISUALIZATION ]
+    </button>
 </div>
 
 </body>
