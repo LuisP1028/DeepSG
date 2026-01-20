@@ -289,6 +289,12 @@ li { margin-bottom: 5px; }
             <p><strong>CONVOLUTION VS IDENTITY BLOCK</strong></p>
             <p>Convolutional block = shrink data,</p>
             <p>Identity block = inspect data</p>
+            <p>These blocks are the literal building bricks of a ResNet architecture. Their usage is dictated by the mathematical requirement of the <strong>skip connection</strong>.</p>
+            <p>Remember, ResNets rely on <strong>adding</strong> the input (𝐱) to the output (𝐅(𝐱)). You can only add two matrices if they have the exact same dimensions.</p>
+            <ol>
+                <li><strong>Identity Block:</strong> Used when the layers maintain the image size. The skip connection is a simple wire because 𝐱 and 𝐅(𝐱) match perfectly, so addition is instant.</li>
+                <li><strong>Convolutional Block:</strong> Used when the network needs to downsample (shrink) the image. Since the main path shrinks the data, the original input (𝐱) is now too big to be added to the output. The Convolutional Block adds a small 1x1 convolution to the skip connection to resize 𝐱, ensuring the dimensions match so the addition can happen.</li>
+            </ol>
             <p><strong>Identity Block</strong></p>
             <p>The input has the same height, width, and number of channels as the output.</p>
             <ul>
