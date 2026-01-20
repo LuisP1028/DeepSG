@@ -68,6 +68,16 @@ h1 {
     text-align: center;
 }
 
+h2 {
+    font-family: var(--font-header);
+    text-transform: uppercase;
+    font-size: 1.8rem;
+    border-bottom: 3px solid var(--dim-color);
+    margin-top: 50px;
+    margin-bottom: 25px;
+    color: var(--accent-color);
+}
+
 strong { color: var(--accent-color); text-decoration: underline; }
 em { font-style: normal; color: #50c878; border-bottom: 1px dotted var(--dim-color); }
 
@@ -273,6 +283,8 @@ li { margin-bottom: 5px; }
             <p>Best practical compromise (most common in deep learning): use a small batch (e.g., 32–256 examples). Average gradient over the batch → one update. Balances noise/speed/accuracy; enables efficient vectorization/GPU use.</p>
         </div>
     </details>
+
+    <h2>Learning Rate Optimizers</h2>
 
     <!-- AdaGrad -->
     <details class="section">
