@@ -256,11 +256,20 @@ li { margin-bottom: 5px; }
             <p><strong>LAYER TYPES REVIEW</strong></p>
             <p><strong>Convolution:</strong></p>
             <p>You have a small grid of numbers (a "kernel") that slides across the image. At every stop, it performs a dot product; It asks: "How much does this patch match my specific pattern?" If the kernel is looking for a vertical line and finds one, the math returns a high number. If not, it returns a low one.</p>
+            
+            <p><strong>Batch Normalization:</strong></p>
+            <p>Placed typically after Convolution but before activation, this layer recalibrates the "heat map" values. It calculates the batch's mean and variance to normalize the dot-product outputs, ensuring they fall within a stable range. This prevents the downstream Dense Layers from having to constantly adapt to wild swings in signal intensity (internal covariate shift) and allows the network to converge faster.</p>
+
             <p><strong>Max Pooling:</strong></p>
             <p>Invariance to translations.</p>
             <p>Think of the previous layer (Convolution) as creating a "heat map" of where specific features are. If it was looking for a curve, it put a high number (like a 9) where it saw a perfect curve, and a low number (like a 0) where it didn't.Max Pooling acts as a strict summarizer. It looks at small patches of that "heat map" (e.g., a 2x2 grid) and keeps only the single highest number, discarding the rest. By keeping the peak value in a patch, it detects features even if they shift slightly. It tracks what is there, not precisely where it is.</p>
+
             <p><strong>Dense Layers</strong></p>
             <p>They transition from feature extraction to classification, mapping the aggregated "summary" of features to final decision probabilities. If you jump straight from raw evidence to the verdict, it's too chaotic. The first dense layer acts as a synthesizer: it combines scattered clues into high-level abstract concepts (like "upper loop" or "curved spine"). The second, smaller layer creates a bottleneck. By physically shrinking the layer size, we force the network to discard noise and compress those concepts into a concise summary before the final decision is delivered.</p>
+
+            <p><strong>Dropout:</strong></p>
+            <p>Applied primarily within Dense Layers, this acts as a stress test for the "synthesizer." By randomly silencing neurons during training, it forces the dense layers to not rely on any single "clue" or path. This compels the network to learn redundant representations for those high-level abstract concepts, ensuring the final bottleneck compresses actual signal rather than memorizing noise.</p>
+
             <p>P.S. The typical number of dense layers is between 1 and 3.</p>
         </div>
     </details>
