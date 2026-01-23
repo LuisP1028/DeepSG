@@ -223,7 +223,7 @@ li { margin-bottom: 5px; }
         <summary>Overview</summary>
         <div class="section-content">
             <p><strong>Activation Functions</strong></p>
-            <p>Activation functions introduce non-linearity into neural networks, allowing them to learn complex patterns. Without them, a deep network would behave like a single linear layer regardless of depth.</p>
+            <p>Since neural networks evolved from simpler models like linear regression, they rely on linear layers to determine magnitude and direction. However, stacking these layers without modification results in a behavior equivalent to a single linear layer regardless of depth. Activation functions introduce non-linearity by "breaking" the straight output of the linear layers to provide shape. By creating these pivot points, they allow the network to evolve beyond simple regression trends and learn complex, non-linear features.</p>
         </div>
     </details>
 
@@ -283,12 +283,14 @@ li { margin-bottom: 5px; }
     <div class="section-content">
         <p>f(x) = max(0, x)</p>
         <p>Output range: [0, ∞)</p>
+        <p>As the network learns to shift irrelevant noise into the negative range, ReLU "switches off" those neurons. This resulting field of zeros creates sparsity, ensuring the model processes only meaningful signals.ReLU converts all negative values to zero.</p>
         <p>Advantages:</p>
         <ul>
             <li>Very fast to compute (simple thresholding).</li>
             <li>No vanishing gradient for positive values → faster convergence in practice.</li>
             <li>Promotes sparsity (many neurons output 0) → This makes the model efficient because it processes less data.</li>
             <li>Sparsity is helpful because it treats irrelevant data as non-existent, rather than "opposite" (negative).</li>
+            <li>Sparsity works by having the linear layer learn to subtract a bias, shifting normal signals below zero. Only anomalies overcome this threshold to become positive and activate.</li>
             <li>Without sparsity, every neuron contributes to every decision, creating a noisy blend. Sparsity forces neurons to be specialists, reducing overfitting.</li>
         </ul>
         <p>Main issue: <strong>Dying ReLU</strong> problem — neurons can get stuck outputting 0 forever if they receive only negative inputs (gradient = 0).</p>
