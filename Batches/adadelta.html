@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AdaDelta vs AdaGrad // Ditherpunk Auto-Fit</title>
+    <style>
+        :root {
+            --term-green: #39FF14;
+            --term-red: #FF0055;
+            --term-black: #050505;
+            --term-off: #1a1a1a;
+            
+            /* Sidebar width: fixed range */
+            --panel-width: clamp(280px, 25vw, 400px);
+        }
+
+        * { box-sizing: border-box; }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--term-black);
+            color: var(--term-green);
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden; /* Global scroll lock */
+        }
+
+        /* --- MAIN LAYOUT --- */
+        #app-root {
+            display: flex;
+            flex-direction: row; /* FORCE SIDE-BY-SIDE */
+            width: 100%;
+            height: 100%;
+            position: relative;
+            z-index: 5;
+        }
+
+        /* --- SIDEBAR UI (Left) --- */
+        #ui-panel {
+            flex: 0 0 var(--panel-width);
+            height: 100%;
+            background: var(--term-black);
+            border-right: 2px solid var(--term-green);
+            
+            /* DYNAMIC FLEX LAYOUT */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between; /* Spreads components to fill height */
+            
+            /* Adaptive padding based on viewport height */
+            padding: clamp(10px, 2vh, 20px);
+            gap: clamp(5px, 1vh, 15px);
+            
+            /* NO SCROLLBAR */
+            overflow: hidden; 
+            z-index: 20;
+            
+            font-size: 0.9rem;
+        }
+
+        /* --- VISUALIZATION AREA (Right) --- */
+        #viz-container {
+            flex: 1 1 auto;
+            position: relative;
+            overflow: hidden;
+            background: #000;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated; 
+        }
+
+        /* --- OVERLAYS --- */
+        #crt-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            z-index: 100;
+            background: 
+                linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 6px 100%;
+        }
+
+        /* --- UI COMPONENTS --- */
+        /* Header Section */
+        .header-section {
+            flex: 0 0 auto; /* Don't shrink */
+        }
+
+        h1 {
+            font-size: clamp(1rem, 2.5vh, 1.4rem);
+            text-transform: uppercase;
+            margin: 0 0 1vh 0;
+            border-bottom: 2px dashed var(--term-green);
+            padding-bottom: 0.5vh;
+            text-align: center;
+            letter-spacing: 0.1em;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: space-evenly;
+            font-size: 0.8rem;
+            border: 1px dotted var(--term-green);
+            padding: 0.5em;
+        }
+        .legend-item { display: flex; align-items: center; gap: 0.5em; }
+        .swatch { width: 0.8em; height: 0.8em; border: 1px solid white; }
+        .swatch.green { background: var(--term-green); border-color: var(--term-green); }
+        .swatch.red { background: var(--term-red); border-color: var(--term-red); }
+
+        /* METER SECTION (The "Squishy" Part) */
+        .meter-section {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto; /* Grow to fill space, shrink if needed */
+            min-height: 80px; /* Don't disappear completely */
+            max-height: 200px; /* Limit expansion */
+        }
+
+        .section-title {
+            font-size: 0.75rem;
+            background: var(--term-green);
+            color: var(--term-black);
+            padding: 0.2em 0.5em;
+            margin-bottom: 0.5em;
+            font-weight: bold;
+            display: inline-block;
+            text-transform: uppercase;
+            flex-shrink: 0;
+        }
+
+        .meter-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 5px;
+            flex: 1; /* Fill the section height */
+            border: 1px solid var(--term-off);
+            padding: 5px;
+            background: rgba(0, 10, 0, 0.5);
+        }
+
+        .bar-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            height: 100%;
+        }
+
+        .bar-track {
+            width: 100%;
+            flex-grow: 1;
+            background: #111;
+            display: flex;
+            align-items: flex-end;
+            border-bottom: 2px solid #333;
+        }
+
+        .bar-fill { width: 100%; height: 0%; transition: height 0.1s linear; }
+        .bar-fill.friction { background: repeating-linear-gradient(45deg, var(--term-red), var(--term-red) 2px, #300 2px, #300 4px); }
+        .bar-fill.inertia { background: repeating-linear-gradient(45deg, #00BFFF, #00BFFF 2px, #003 2px, #003 4px); }
+        .bar-fill.ratio { background: var(--term-green); box-shadow: 0 0 10px var(--term-green); }
+
+        .bar-label { font-size: 0.65rem; margin-top: 3px; text-align: center; color: #aaa; }
+        .math-row { 
+            text-align: center; 
+            font-size: 0.75rem; 
+            margin-top: 5px; 
+            color: #fff; 
+            font-family: serif; 
+            font-style: italic;
+            flex-shrink: 0;
+        }
+
+        /* CONTROLS SECTION */
+        .controls-section {
+            flex: 0 0 auto; /* Keep inputs stable */
+        }
+        
+        .control-group { margin-bottom: 0.5vh; }
+        
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            margin: 0.5rem 0;
+            height: 1.5rem;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; cursor: pointer;
+            background: var(--term-off); border: 1px solid var(--term-green);
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 18px; width: 10px; background: var(--term-green);
+            cursor: pointer; -webkit-appearance: none; margin-top: -6px;
+        }
+
+        button {
+            background: var(--term-black);
+            color: var(--term-green);
+            border: 2px solid var(--term-green);
+            padding: clamp(0.5rem, 1.5vh, 1rem); /* Button scales with height */
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-transform: uppercase;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: var(--term-green);
+            color: var(--term-black);
+        }
+        
+        /* FOOTER TEXT (Sacrificial Element) */
+        .desc-text {
+            font-size: 0.7rem; 
+            opacity: 0.6; 
+            line-height: 1.3; 
+            padding-top: 1vh;
+            border-top: 1px dotted #333;
+            flex-shrink: 1; /* Allow compression */
+            display: block;
+        }
+
+        /* --- HEIGHT QUERIES (The "Squish" Logic) --- */
+        /* If window is short, hide footer description */
+        @media (max-height: 600px) {
+            .desc-text { display: none; }
+            h1 { font-size: 1rem; margin-bottom: 5px; }
+        }
+        
+        /* If window is VERY short, shrink padding/gaps */
+        @media (max-height: 400px) {
+            #ui-panel { gap: 5px; padding: 5px; }
+            .section-title { font-size: 0.6rem; padding: 0 2px; }
+            .legend { padding: 2px; }
+            button { padding: 5px; font-size: 0.8rem; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="crt-overlay"></div>
+
+    <div id="app-root">
+        
+        <div id="ui-panel">
+            
+            <div class="header-section">
+                <h1>Optimizer Arena</h1>
+                <div class="legend">
+                    <div class="legend-item"><div class="swatch green"></div> ADADELTA</div>
+                    <div class="legend-item"><div class="swatch red"></div> ADAGRAD</div>
+                </div>
+            </div>
+
+            <div class="meter-section">
+                <div class="section-title">Internal State</div>
+                <div class="meter-container">
+                    <div class="bar-col">
+                        <div class="bar-track"><div id="bar-fric" class="bar-fill friction"></div></div>
+                        <div class="bar-label">FRICTION<br>(RMS[g])</div>
+                    </div>
+                    <div class="bar-col">
+                        <div class="bar-track"><div id="bar-inert" class="bar-fill inertia"></div></div>
+                        <div class="bar-label">INERTIA<br>(RMS[&Delta;x])</div>
+                    </div>
+                    <div class="bar-col">
+                        <div class="bar-track"><div id="bar-ratio" class="bar-fill ratio"></div></div>
+                        <div class="bar-label">SPEED<br>(Ratio)</div>
+                    </div>
+                </div>
+                <div class="math-row">
+                    Step &asymp; Inertia / Friction
+                </div>
+            </div>
+
+            <div class="controls-section">
+                <div class="section-title">Params</div>
+                <div class="control-group">
+                    <label style="display:flex; justify-content:space-between; font-size:0.8rem;">
+                        <span>DECAY RATE (&rho;)</span>
+                        <span id="rho-val">0.950</span>
+                    </label>
+                    <input type="range" id="rho-slider" min="500" max="999" value="950">
+                    <div style="font-size: 0.7rem; opacity: 0.7; display: flex; justify-content: space-between;">
+                        <span>Volatile</span>
+                        <span>Stable</span>
+                    </div>
+                </div>
+
+                <button id="reset-btn">Reset Simulation</button>
+            </div>
+            
+            <div class="desc-text">
+                <span style="color:var(--term-red)">ADAGRAD:</span> Accums gradient forever. Dies on flat ground.<br>
+                <span style="color:var(--term-green)">ADADELTA:</span> Adapts ratio. Accelerates on flat ground.
+            </div>
+        </div>
+
+        <div id="viz-container">
+            <canvas id="canvas"></canvas>
+        </div>
+
+    </div>
+
+    <script>
+        /**
+         * ADADELTA vs ADAGRAD VISUALIZATION (Vertical Auto-Fit)
+         * Engine: Plateau Valley (x^4 + 10y^4)
+         */
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('viz-container');
+
+        // UI Refs
+        const barFric = document.getElementById('bar-fric');
+        const barInert = document.getElementById('bar-inert');
+        const barRatio = document.getElementById('bar-ratio');
+        const rhoSlider = document.getElementById('rho-slider');
+        const rhoDisplay = document.getElementById('rho-val');
+        const resetBtn = document.getElementById('reset-btn');
+
+        // State
+        let width, height, centerX, centerY;
+        let isRunning = true;
+        let rho = 0.95;
+        const epsilon = 1e-6;
+
+        // Models
+        let adagrad = { pos: {x:0, y:0}, path: [], G: {x:0, y:0}, lr: 1.0 };
+        let adadelta = { pos: {x:0, y:0}, path: [], E_g2: {x:0, y:0}, E_dx2: {x:0.1, y:0.1} };
+
+        // --- MATH ---
+        function getGradient(x, y) {
+            // Normalize to approximately -2..2 world space based on canvas size
+            const scaleFactor = Math.min(width, height) / 4; 
+            const wx = x / scaleFactor; 
+            const wy = y / scaleFactor;
+            
+            // Derivatives
+            const gx = 4 * Math.pow(wx, 3);
+            const gy = 40 * Math.pow(wy, 3);
+            
+            return { x: gx, y: gy };
+        }
+
+        // --- INIT ---
+        function init() {
+            // ResizeObserver handles all window size changes automatically
+            const resizeObserver = new ResizeObserver(() => resize());
+            resizeObserver.observe(container);
+            
+            resize(); // Initial call
+            resetAgents();
+            loop();
+        }
+
+        function resize() {
+            // Use client dimensions of the container
+            width = container.clientWidth;
+            height = container.clientHeight;
+            
+            // Set internal resolution
+            canvas.width = width;
+            canvas.height = height;
+            
+            centerX = width / 2;
+            centerY = height / 2;
+        }
+
+        function resetAgents() {
+            const scale = Math.min(width, height);
+            const offsetX = scale * 0.4;
+            const offsetY = scale * 0.3;
+            
+            const qx = Math.random() > 0.5 ? 1 : -1;
+            const qy = Math.random() > 0.5 ? 1 : -1;
+
+            const startPos = { 
+                x: centerX + (offsetX * qx), 
+                y: centerY + (offsetY * qy) 
+            };
+
+            adagrad = { pos: {...startPos}, path: [], G: {x:0, y:0}, lr: 1.0 };
+            adadelta = { pos: {...startPos}, path: [], E_g2: {x:0, y:0}, E_dx2: {x:0.1, y:0.1} };
+        }
+
+        // --- UPDATE ---
+        function update() {
+            rho = parseInt(rhoSlider.value) / 1000;
+            const stepScale = 50; // Visual scaling factor
+
+            // ADAGRAD
+            {
+                const g = getGradient(adagrad.pos.x - centerX, adagrad.pos.y - centerY);
+                adagrad.G.x += g.x * g.x;
+                adagrad.G.y += g.y * g.y;
+                
+                const stepX = - (adagrad.lr / Math.sqrt(adagrad.G.x + epsilon)) * g.x * stepScale;
+                const stepY = - (adagrad.lr / Math.sqrt(adagrad.G.y + epsilon)) * g.y * stepScale;
+
+                adagrad.pos.x += stepX;
+                adagrad.pos.y += stepY;
+                adagrad.path.push({ ...adagrad.pos });
+            }
+
+            // ADADELTA
+            let vizStats = { friction: 0, inertia: 0, ratio: 0 };
+            {
+                const g = getGradient(adadelta.pos.x - centerX, adadelta.pos.y - centerY);
+
+                // Update Friction
+                adadelta.E_g2.x = rho * adadelta.E_g2.x + (1 - rho) * g.x * g.x;
+                adadelta.E_g2.y = rho * adadelta.E_g2.y + (1 - rho) * g.y * g.y;
+                const rms_g_x = Math.sqrt(adadelta.E_g2.x + epsilon);
+                const rms_g_y = Math.sqrt(adadelta.E_g2.y + epsilon);
+
+                // Get Inertia
+                const rms_dx_x = Math.sqrt(adadelta.E_dx2.x + epsilon);
+                const rms_dx_y = Math.sqrt(adadelta.E_dx2.y + epsilon);
+
+                // Ratio
+                const ratioX = rms_dx_x / rms_g_x;
+                const ratioY = rms_dx_y / rms_g_y;
+
+                // Step
+                const stepX = -ratioX * g.x * stepScale; 
+                const stepY = -ratioY * g.y * stepScale;
+
+                adadelta.pos.x += stepX;
+                adadelta.pos.y += stepY;
+                adadelta.path.push({ ...adadelta.pos });
+
+                // Accumulate Inertia (using normalized step)
+                const rawStepX = stepX / stepScale; 
+                const rawStepY = stepY / stepScale;
+                adadelta.E_dx2.x = rho * adadelta.E_dx2.x + (1 - rho) * rawStepX * rawStepX;
+                adadelta.E_dx2.y = rho * adadelta.E_dx2.y + (1 - rho) * rawStepY * rawStepY;
+
+                // Stats for Viz
+                vizStats.friction = Math.sqrt(rms_g_x**2 + rms_g_y**2);
+                vizStats.inertia = Math.sqrt(rms_dx_x**2 + rms_dx_y**2);
+                vizStats.ratio = Math.sqrt(ratioX**2 + ratioY**2);
+            }
+
+            // Update Bars
+            barFric.style.height = Math.min(100, vizStats.friction * 40) + '%';
+            barInert.style.height = Math.min(100, vizStats.inertia * 500) + '%';
+            barRatio.style.height = Math.min(100, vizStats.ratio * 50) + '%';
+
+            // Trim Trails
+            if (adagrad.path.length > 300) adagrad.path.shift();
+            if (adadelta.path.length > 300) adadelta.path.shift();
+        }
+
+        // --- RENDER ---
+        function draw() {
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, width, height);
+            drawContours();
+            
+            drawPath(adagrad.path, '#FF0055');
+            drawAgent(adagrad.pos, '#FF0055', 'rival');
+
+            drawPath(adadelta.path, '#39FF14');
+            drawAgent(adadelta.pos, '#39FF14', 'hero');
+        }
+
+        function drawContours() {
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = '#112211';
+            const maxR = Math.max(width, height);
+            // Draw valley contours
+            for(let r=40; r < maxR; r+=60) {
+                ctx.beginPath();
+                ctx.ellipse(centerX, centerY, r, r * 0.35, 0, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            // Target
+            ctx.fillStyle = '#39FF14';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 2, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        function drawPath(path, color) {
+            if (path.length < 2) return;
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.moveTo(path[0].x, path[0].y);
+            for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+            ctx.stroke();
+        }
+
+        function drawAgent(pos, color, type) {
+            const size = 12;
+            ctx.save();
+            ctx.translate(pos.x, pos.y);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.fillStyle = color;
+
+            if (type === 'rival') {
+                ctx.beginPath();
+                ctx.arc(0, 0, size/2, 0, Math.PI*2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(-size/1.5, 0); ctx.lineTo(size/1.5, 0);
+                ctx.moveTo(0, -size/1.5); ctx.lineTo(0, size/1.5);
+                ctx.stroke();
+            } else {
+                ctx.fillRect(-size/2, -size/2, size, size);
+                ctx.shadowColor = color;
+                ctx.shadowBlur = 10;
+                ctx.strokeRect(-size/2, -size/2, size, size);
+            }
+            ctx.restore();
+        }
+
+        function loop() {
+            if(isRunning) {
+                update();
+                draw();
+            }
+            requestAnimationFrame(loop);
+        }
+
+        rhoSlider.addEventListener('input', (e) => rhoDisplay.innerText = (e.target.value / 1000).toFixed(3));
+        resetBtn.addEventListener('click', () => resetAgents());
+
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini-Batch Gradient Descent // Ditherpunk</title>
+    <style>
+        :root {
+            --term-green: #39FF14;
+            --term-black: #050505;
+            --panel-width: 300px;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--term-black);
+            color: var(--term-green);
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden; 
+        }
+
+        /* --- LAYOUT CONTAINER --- */
+        #app-root {
+            display: flex;
+            flex-direction: row; 
+            width: 100%;
+            height: 100%;
+            position: relative;
+            z-index: 5;
+        }
+
+        /* --- UI PANEL (Sidebar) --- */
+        #ui-panel {
+            width: var(--panel-width);
+            min-width: var(--panel-width);
+            background: var(--term-black);
+            border-right: 2px solid var(--term-green);
+            padding: 16px; /* Compact padding */
+            box-sizing: border-box;
+            
+            /* Flex Column to distribute space perfectly */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between; 
+            
+            /* No scrollbar */
+            overflow: hidden; 
+            z-index: 20;
+        }
+
+        /* --- VISUALIZATION AREA --- */
+        #viz-container {
+            flex-grow: 1;
+            position: relative;
+            overflow: hidden;
+            background: #000;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* --- RESPONSIVE BREAKPOINT (Mobile) --- */
+        @media (max-width: 768px) {
+            #app-root {
+                flex-direction: column; 
+            }
+            
+            #ui-panel {
+                width: 100%;
+                min-width: 0;
+                /* Fixed height on mobile, roughly 35% of screen */
+                height: 35vh; 
+                border-right: none;
+                border-bottom: 2px solid var(--term-green);
+                padding: 10px;
+            }
+            
+            /* Make controls tighter on mobile */
+            .control-group { margin-bottom: 4px !important; }
+            h1 { font-size: 14px !important; margin-bottom: 5px !important; }
+            button { padding: 8px !important; }
+            #data-viz { display: none; } /* Hide data grid on very small screens to save space */
+        }
+
+        /* --- VISUAL FX LAYERS --- */
+        #crt-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 50;
+            background: 
+                linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+        }
+
+        #noise-layer {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            opacity: 0.12;
+            z-index: 49;
+            pointer-events: none;
+            background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E');
+        }
+
+        /* --- UI COMPONENTS --- */
+        h1 {
+            font-size: 16px;
+            text-transform: uppercase;
+            margin: 0 0 10px 0;
+            border-bottom: 1px dashed var(--term-green);
+            padding-bottom: 5px;
+            letter-spacing: 2px;
+            text-align: center;
+            flex-shrink: 0; /* Never shrink title */
+        }
+
+        /* Group controls to keep them together */
+        .controls-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 12px; /* Consistent spacing between sliders */
+            flex-shrink: 0; /* Do not shrink inputs */
+        }
+
+        .control-group { 
+            display: block; 
+        }
+
+        label { 
+            display: block; 
+            font-size: 11px; 
+            margin-bottom: 4px; 
+            opacity: 0.9; 
+            text-transform: uppercase;
+        }
+        
+        .value-display { float: right; font-weight: bold; }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            margin: 0;
+        }
+        input[type=range]:focus { outline: none; }
+        
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 10px;
+            cursor: pointer;
+            background: repeating-linear-gradient(
+                45deg,
+                var(--term-black),
+                var(--term-black) 4px,
+                var(--term-green) 4px,
+                var(--term-green) 6px
+            );
+            border: 1px solid var(--term-green);
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            height: 16px;
+            width: 10px;
+            border: 1px solid var(--term-green);
+            background: #000;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -4px; 
+            box-shadow: 0 0 4px var(--term-green);
+        }
+
+        button {
+            background: transparent;
+            color: var(--term-green);
+            border: 2px solid var(--term-green);
+            padding: 10px;
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 12px;
+            cursor: pointer;
+            text-transform: uppercase;
+            width: 100%;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background: var(--term-green);
+            color: var(--term-black);
+            box-shadow: 0 0 10px var(--term-green);
+        }
+
+        /* Flexible Data Viz Box */
+        .viz-wrapper {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1; /* Take up remaining space */
+            min-height: 60px; /* Minimum useful height */
+            max-height: 150px; /* Cap it so it doesn't look weird on tall screens */
+            margin-top: 15px;
+            border-top: 1px dotted rgba(57, 255, 20, 0.3);
+            padding-top: 10px;
+        }
+
+        #data-viz {
+            flex-grow: 1; /* Fill the wrapper */
+            border: 1px solid var(--term-green);
+            padding: 2px;
+            display: grid;
+            grid-template-columns: repeat(20, 1fr);
+            gap: 1px;
+            background: rgba(0, 20, 0, 0.5);
+        }
+        
+        .data-dot { background: #1a1a1a; width: 100%; height: 100%; }
+        .data-dot.active { background: var(--term-green); box-shadow: 0 0 2px var(--term-green); }
+
+    </style>
+</head>
+<body>
+
+    <div id="crt-overlay"></div>
+    <div id="noise-layer"></div>
+
+    <div id="app-root">
+        
+        <div id="ui-panel">
+            
+            <div>
+                <h1>Optimizer Control</h1>
+                
+                <div class="controls-wrapper">
+                    <div class="control-group">
+                        <label>Batch Size: <span id="batch-val" class="value-display">32</span></label>
+                        <input type="range" id="batch-slider" min="1" max="256" value="32">
+                        <div style="font-size: 9px; margin-top:4px; opacity: 0.7; display: flex; justify-content: space-between;">
+                            <span>NOISY</span>
+                            <span>SMOOTH</span>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label>Learning Rate: <span id="lr-val" class="value-display">0.050</span></label>
+                        <input type="range" id="lr-slider" min="1" max="100" value="50">
+                    </div>
+
+                    <button id="reset-btn">Reset Simulation</button>
+                </div>
+            </div>
+
+            <div class="viz-wrapper">
+                <label>Data Sampling (N=1000)</label>
+                <div id="data-viz">
+                    </div>
+            </div>
+        </div>
+
+        <div id="viz-container">
+            <canvas id="canvas"></canvas>
+        </div>
+
+    </div>
+
+    <script>
+        /**
+         * MINI-BATCH GRADIENT DESCENT VISUALIZATION
+         * Layout: Flexbox-based to eliminate scrollbars.
+         */
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const vizContainer = document.getElementById('viz-container');
+        
+        const batchSlider = document.getElementById('batch-slider');
+        const lrSlider = document.getElementById('lr-slider');
+        const batchDisplay = document.getElementById('batch-val');
+        const lrDisplay = document.getElementById('lr-val');
+        const resetBtn = document.getElementById('reset-btn');
+        const dataGrid = document.getElementById('data-viz');
+
+        let width, height, centerX, centerY;
+        let modelPos = { x: 0, y: 0 };
+        let pathHistory = [];
+        let isRunning = true;
+        
+        const totalDots = 100; 
+        let dots = [];
+
+        function init() {
+            resize();
+            const resizeObserver = new ResizeObserver(() => resize());
+            resizeObserver.observe(vizContainer);
+            createDataGrid();
+            resetModel();
+            loop();
+        }
+
+        function resize() {
+            width = vizContainer.clientWidth;
+            height = vizContainer.clientHeight;
+            canvas.width = width;
+            canvas.height = height;
+            centerX = width / 2;
+            centerY = height / 2;
+        }
+
+        function resetModel() {
+            const offset = Math.min(width, height) * 0.35;
+            const dirX = Math.random() > 0.5 ? 1 : -1;
+            const dirY = Math.random() > 0.5 ? 1 : -1;
+            modelPos.x = centerX + (offset * dirX);
+            modelPos.y = centerY + (offset * dirY);
+            pathHistory = [];
+        }
+
+        function createDataGrid() {
+            dataGrid.innerHTML = '';
+            dots = [];
+            for(let i=0; i<totalDots; i++) {
+                const d = document.createElement('div');
+                d.className = 'data-dot';
+                dataGrid.appendChild(d);
+                dots.push(d);
+            }
+        }
+
+        function update() {
+            const batchSize = parseInt(batchSlider.value);
+            const learningRate = parseInt(lrSlider.value) / 1000; 
+
+            const dx = centerX - modelPos.x;
+            const dy = centerY - modelPos.y;
+            
+            // Noise calculation: k / sqrt(batch_size)
+            const noiseBase = 150; 
+            const noiseMagnitude = noiseBase * (1 / Math.sqrt(batchSize)); 
+            
+            const noiseX = (Math.random() - 0.5) * noiseMagnitude * 2;
+            const noiseY = (Math.random() - 0.5) * noiseMagnitude * 2;
+
+            const stepX = (dx * 0.05 + noiseX) * learningRate * 6; 
+            const stepY = (dy * 0.05 + noiseY) * learningRate * 6;
+
+            modelPos.x += stepX;
+            modelPos.y += stepY;
+
+            pathHistory.push({x: modelPos.x, y: modelPos.y});
+            if (pathHistory.length > 400) pathHistory.shift();
+
+            updateDataViz(batchSize);
+        }
+
+        function updateDataViz(batchSize) {
+            const numActive = Math.ceil((batchSize / 256) * totalDots);
+            
+            // Optimized class toggle
+            for (let i = 0; i < dots.length; i++) {
+                // Random toggle roughly based on batch size probability
+                // This creates a nice flickering effect without full loop overhead every frame
+                if (Math.random() < 0.1) {
+                    dots[i].classList.toggle('active', Math.random() * totalDots < numActive);
+                }
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, width, height);
+
+            drawContourMap();
+            drawPath();
+            drawModel();
+        }
+
+        function drawContourMap() {
+            ctx.strokeStyle = '#112211'; 
+            ctx.lineWidth = 2;
+            
+            const maxRadius = Math.max(width, height) * 0.8;
+            for (let r = 50; r < maxRadius; r += 60) {
+                ctx.beginPath();
+                ctx.ellipse(centerX, centerY, r, r * 0.75, 0, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            ctx.strokeStyle = '#39FF14';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(centerX - 10, centerY); ctx.lineTo(centerX + 10, centerY);
+            ctx.moveTo(centerX, centerY - 10); ctx.lineTo(centerX, centerY + 10);
+            ctx.stroke();
+            
+            ctx.fillStyle = '#39FF14';
+            ctx.font = "10px Courier New";
+            ctx.fillText("LOSS_MINIMA", centerX + 12, centerY + 12);
+        }
+
+        function drawPath() {
+            if (pathHistory.length < 2) return;
+
+            ctx.beginPath();
+            ctx.strokeStyle = '#39FF14';
+            ctx.lineWidth = 2;
+            
+            ctx.moveTo(pathHistory[0].x, pathHistory[0].y);
+            for (let i = 1; i < pathHistory.length; i++) {
+                ctx.lineTo(pathHistory[i].x, pathHistory[i].y);
+            }
+            ctx.stroke();
+        }
+
+        function drawModel() {
+            const size = 12;
+            ctx.fillStyle = '#000';
+            ctx.fillRect(modelPos.x - size/2, modelPos.y - size/2, size, size);
+            ctx.strokeStyle = '#39FF14';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(modelPos.x - size/2, modelPos.y - size/2, size, size);
+
+            if (pathHistory.length > 1) {
+                const last = pathHistory[pathHistory.length-2];
+                const vx = modelPos.x - last.x;
+                const vy = modelPos.y - last.y;
+                const vScale = 8;
+                
+                ctx.beginPath();
+                ctx.moveTo(modelPos.x, modelPos.y);
+                ctx.lineTo(modelPos.x + vx * vScale, modelPos.y + vy * vScale);
+                ctx.strokeStyle = 'rgba(57, 255, 20, 0.5)';
+                ctx.stroke();
+            }
+        }
+
+        function loop() {
+            if (isRunning) {
+                update();
+                draw();
+            }
+            requestAnimationFrame(loop);
+        }
+
+        batchSlider.addEventListener('input', (e) => {
+            batchDisplay.innerText = e.target.value;
+        });
+
+        lrSlider.addEventListener('input', (e) => {
+            lrDisplay.innerText = (parseInt(e.target.value) / 1000).toFixed(3);
+        });
+
+        resetBtn.addEventListener('click', () => {
+            resetModel();
+        });
+
+        init();
+
+    </script>
+</body>
+</html>

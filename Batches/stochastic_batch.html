@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SGD_VISUALIZER_INVERTED_ATKINSON</title>
+    <style>
+        :root {
+            /* INVERTED SCHEME */
+            --term-bg: #00FF33;      /* Bright Green Background */
+            --term-ink: #080808;     /* Dark Ink Foreground */
+            --term-accent: #FF3333;  /* Red for vectors/highlights */
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--term-bg);
+            color: var(--term-ink);
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated; 
+        }
+
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+            background: rgba(0, 255, 51, 0.85); /* Semi-transparent green */
+            padding: 10px;
+            border: 2px solid var(--term-ink);
+            box-shadow: 4px 4px 0px var(--term-ink); /* Hard shadow */
+            color: var(--term-ink);
+            font-weight: bold;
+        }
+
+        h1 {
+            font-size: 14px;
+            margin: 0 0 10px 0;
+            text-transform: uppercase;
+            border-bottom: 2px solid var(--term-ink);
+            padding-bottom: 5px;
+        }
+
+        .stat-row {
+            font-size: 12px;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            min-width: 200px;
+        }
+
+        /* Subtle noise overlay to break up the flat green */
+        .paper-texture {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            opacity: 0.15;
+            pointer-events: none;
+            z-index: 10;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hud">
+        <h1>SGD_LANDSCAPE_//INV</h1>
+        <div class="stat-row"><span>LOSS:</span> <span id="loss-val">0.000</span></div>
+        <div class="stat-row"><span>ITERATION:</span> <span id="epoch-val">0</span></div>
+        <div class="stat-row"><span>ALGORITHM:</span> <span>ATKINSON_DITHER</span></div>
+        <div class="stat-row"><span>STATUS:</span> <span id="status-val">INITIALIZING...</span></div>
+        <br>
+        <div style="font-size: 10px; opacity: 0.8;">> CLICK TO RANDOMIZE</div>
+    </div>
+
+    <div class="paper-texture"></div>
+    <canvas id="simCanvas"></canvas>
+
+<script>
+    /**
+     * CONFIGURATION
+     */
+    const INTERNAL_WIDTH = 320; 
+    const INTERNAL_HEIGHT = 240;
+    const LEARNING_RATE = 0.015; 
+    const NOISE_MAGNITUDE = 1.0; 
+    const MAX_TRAIL_LENGTH = 200;
+
+    /**
+     * STATE
+     */
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d', { alpha: false }); 
+    
+    // UI Elements
+    const uiLoss = document.getElementById('loss-val');
+    const uiEpoch = document.getElementById('epoch-val');
+    const uiStatus = document.getElementById('status-val');
+
+    let agent = { x: 0, y: 0 };
+    let trail = [];
+    let iteration = 0;
+    let landscapeCache = null;
+
+    /**
+     * LOSS FUNCTION
+     * A landscape with a central deep valley (Global Minima) 
+     * and rippling hills (Local Minima).
+     */
+    function getLoss(x, y) {
+        const nx = (x - INTERNAL_WIDTH / 2) / 25;
+        const ny = (y - INTERNAL_HEIGHT / 2) / 25;
+
+        // Convex bowl
+        const bowl = (nx * nx + ny * ny) * 0.5;
+        // Ripples
+        const ripple = Math.cos(2.5 * nx) + Math.sin(2.5 * ny);
+
+        return bowl + (ripple * 1.5) + 5; 
+    }
+
+    function getGradient(x, y) {
+        const h = 0.1; 
+        const currentLoss = getLoss(x, y);
+        const dLdx = (getLoss(x + h, y) - currentLoss) / h;
+        const dLdy = (getLoss(x, y + h) - currentLoss) / h;
+
+        // Stochastic Noise
+        const noiseX = (Math.random() - 0.5) * NOISE_MAGNITUDE * 12;
+        const noiseY = (Math.random() - 0.5) * NOISE_MAGNITUDE * 12;
+
+        return { x: dLdx + noiseX, y: dLdy + noiseY };
+    }
+
+    function init() {
+        canvas.width = INTERNAL_WIDTH;
+        canvas.height = INTERNAL_HEIGHT;
+        generateLandscapeAtkinson(); // Run the expensive dither once
+        resetAgent();
+        requestAnimationFrame(loop);
+    }
+
+    function resetAgent() {
+        // Start near corners
+        agent.x = Math.random() < 0.5 ? Math.random() * 40 : INTERNAL_WIDTH - (Math.random() * 40);
+        agent.y = Math.random() < 0.5 ? Math.random() * 40 : INTERNAL_HEIGHT - (Math.random() * 40);
+        trail = [];
+        iteration = 0;
+        uiStatus.innerText = "SEARCHING...";
+    }
+
+    /**
+     * ATKINSON DITHERING ALGORITHM
+     * Propagates quantization error to 6 neighbors.
+     * Preserves continuous tone topography better than ordered dithering.
+     */
+    function generateLandscapeAtkinson() {
+        const w = INTERNAL_WIDTH;
+        const h = INTERNAL_HEIGHT;
+        
+        // 1. Create a Float32 buffer for calculations (to handle negative errors)
+        // Standard Uint8ClampedArray clips values 0-255, destroying error propagation.
+        const buffer = new Float32Array(w * h);
+
+        // 2. Fill buffer with raw grayscale values based on Loss
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const loss = getLoss(x, y);
+                // Map Loss to 0-255 range. 
+                // High Loss = 255 (White/Green BG)
+                // Low Loss = 0 (Black Ink) -> The "Hole"
+                let val = Math.min(255, Math.max(0, loss * 12));
+                
+                // Invert mapping for visual preference:
+                // Let's make High Loss = DARK (Ink) and Low Loss = LIGHT (Green)
+                // This makes the Global Minima a "clearing" or "light source".
+                val = 255 - val; 
+                
+                buffer[y * w + x] = val;
+            }
+        }
+
+        // 3. Apply Atkinson Dither
+        // Loop pixels
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const i = y * w + x;
+                const oldPixel = buffer[i];
+                
+                // Quantize: If > 128 becomes 255 (Light), else 0 (Dark)
+                const newPixel = oldPixel > 128 ? 255 : 0;
+                
+                buffer[i] = newPixel; // Write final value
+                
+                const error = oldPixel - newPixel;
+
+                // Distribute error (Atkinson Kernel)
+                //       X   1/8  1/8
+                // 1/8  1/8  1/8
+                //      1/8
+                
+                if (x + 1 < w)               buffer[i + 1] += error / 8;
+                if (x + 2 < w)               buffer[i + 2] += error / 8;
+                if (x - 1 >= 0 && y + 1 < h) buffer[(y + 1) * w + (x - 1)] += error / 8;
+                if (y + 1 < h)               buffer[(y + 1) * w + x] += error / 8;
+                if (x + 1 < w && y + 1 < h)  buffer[(y + 1) * w + (x + 1)] += error / 8;
+                if (y + 2 < h)               buffer[(y + 2) * w + x] += error / 8;
+            }
+        }
+
+        // 4. Render to Canvas ImageData
+        const imgData = ctx.createImageData(w, h);
+        const data = imgData.data;
+
+        for (let i = 0; i < buffer.length; i++) {
+            const pixelVal = buffer[i]; // Should be 0 or 255 now
+            const idx = i * 4;
+
+            if (pixelVal > 128) {
+                // LIGHT PIXEL (Background Color)
+                data[idx] = 0;     // R
+                data[idx+1] = 255; // G
+                data[idx+2] = 51;  // B
+                data[idx+3] = 255; // A
+            } else {
+                // DARK PIXEL (Ink Color)
+                data[idx] = 8;     // R
+                data[idx+1] = 8;   // G
+                data[idx+2] = 8;   // B
+                data[idx+3] = 255; // A
+            }
+        }
+
+        createImageBitmap(imgData).then(bmp => {
+            landscapeCache = bmp;
+        });
+    }
+
+    function loop() {
+        if (!landscapeCache) {
+            requestAnimationFrame(loop);
+            return;
+        }
+
+        // UPDATE
+        const grad = getGradient(agent.x, agent.y);
+        agent.x -= LEARNING_RATE * grad.x * 20;
+        agent.y -= LEARNING_RATE * grad.y * 20;
+        agent.x = Math.max(0, Math.min(INTERNAL_WIDTH, agent.x));
+        agent.y = Math.max(0, Math.min(INTERNAL_HEIGHT, agent.y));
+
+        trail.push({x: agent.x, y: agent.y});
+        if (trail.length > MAX_TRAIL_LENGTH) trail.shift();
+
+        // UI
+        iteration++;
+        if (iteration % 5 === 0) {
+            const currentLoss = getLoss(agent.x, agent.y);
+            uiLoss.innerText = currentLoss.toFixed(4);
+            uiEpoch.innerText = iteration;
+            if (currentLoss < 2.5) {
+                uiStatus.innerText = "OPTIMIZED";
+            } else {
+                uiStatus.innerText = "SEARCHING";
+            }
+        }
+
+        // DRAW
+        ctx.drawImage(landscapeCache, 0, 0);
+
+        // Draw Trail (Black Ink)
+        ctx.beginPath();
+        if (trail.length > 0) {
+            ctx.moveTo(trail[0].x, trail[0].y);
+            for (let i = 1; i < trail.length; i++) {
+                ctx.lineTo(trail[i].x, trail[i].y);
+            }
+        }
+        ctx.strokeStyle = "#000000"; 
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Draw Agent (Red Highlight)
+        ctx.fillStyle = "#FF3333";
+        ctx.fillRect(agent.x - 2, agent.y - 2, 4, 4);
+
+        // Draw Gradient Vector
+        ctx.beginPath();
+        ctx.moveTo(agent.x, agent.y);
+        ctx.lineTo(agent.x - grad.x * 8, agent.y - grad.y * 8);
+        ctx.strokeStyle = "#FF3333";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        requestAnimationFrame(loop);
+    }
+
+    window.addEventListener('click', resetAgent);
+    init();
+
+</script>
+</body>
+</html>

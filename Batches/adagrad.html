@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ADAGRAD // GLOWING GRID VISUALIZER</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --fg-color: #00FF41;
+            --dim-color: #003B00;
+            --scanline: rgba(0, 255, 65, 0.05);
+            /* Responsive spacing vars */
+            --space-xs: clamp(4px, 1vw, 8px);
+            --space-sm: clamp(8px, 1.5vw, 12px);
+            --space-md: clamp(12px, 2vw, 20px);
+            --font-base: clamp(0.75rem, 1.5vw, 1rem);
+            --font-lg: clamp(1rem, 2.5vw, 1.5rem);
+        }
+
+        * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-color);
+            color: var(--fg-color);
+            font-family: "Courier New", Courier, monospace;
+            height: 100dvh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            font-size: var(--font-base);
+        }
+
+        /* --- CRT OVERLAY --- */
+        .crt-overlay {
+            position: fixed; inset: 0;
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none; z-index: 999;
+        }
+
+        /* --- MAIN LAYOUT --- */
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            width: calc(100% - var(--space-md) * 2);
+            height: calc(100% - var(--space-md) * 2);
+            margin: var(--space-md);
+            border: 2px solid var(--fg-color);
+            box-shadow: 0 0 15px var(--dim-color);
+        }
+
+        @media (min-width: 768px) {
+            .main-container { flex-direction: row; }
+        }
+
+        /* --- CANVAS SECTION --- */
+        .canvas-wrapper {
+            position: relative;
+            flex: 1;
+            min-height: 40%;
+            border-bottom: 2px solid var(--fg-color);
+            background-image: radial-gradient(var(--dim-color) 1.5px, transparent 1.5px);
+            background-size: 6px 6px;
+            cursor: crosshair;
+            overflow: hidden;
+        }
+
+        @media (min-width: 768px) {
+            .canvas-wrapper {
+                flex: 7;
+                border-bottom: none;
+                border-right: 2px solid var(--fg-color);
+                height: 100%;
+            }
+        }
+
+        canvas { display: block; width: 100%; height: 100%; }
+
+        .overlay-text {
+            position: absolute; 
+            top: var(--space-md); 
+            left: var(--space-md);
+            background: var(--bg-color);
+            padding: var(--space-sm);
+            border: 1px solid var(--fg-color);
+            box-shadow: 4px 4px 0px var(--dim-color);
+            pointer-events: none;
+            font-size: var(--font-base);
+            line-height: 1.4;
+            max-width: 80%;
+            z-index: 10;
+        }
+
+        /* --- DASHBOARD SECTION --- */
+        .dashboard {
+            flex: 1;
+            padding: var(--space-md);
+            display: flex; 
+            flex-direction: column; 
+            gap: var(--space-sm);
+            overflow-y: auto;
+            background: var(--bg-color);
+        }
+
+        @media (min-width: 768px) {
+            .dashboard {
+                flex: 3;
+                min-width: 280px;
+            }
+        }
+
+        h1 { 
+            margin: 0; 
+            font-size: var(--font-lg); 
+            border-bottom: 2px dashed var(--fg-color); 
+            padding-bottom: var(--space-sm); 
+            text-transform: uppercase;
+        }
+        
+        h2 { 
+            margin: var(--space-sm) 0; 
+            font-size: var(--font-base); 
+            background: var(--dim-color); 
+            display: inline-block; 
+            padding: 2px 6px;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-sm);
+            font-size: var(--font-base);
+        }
+        .metric-item { display: flex; flex-direction: column; }
+        .metric-label { opacity: 0.7; font-size: 0.8em; }
+
+        hr { border: 0; border-top: 1px dashed var(--dim-color); width: 100%; margin: var(--space-xs) 0; }
+
+        .bar-group { display: flex; flex-direction: column; gap: 2px; }
+        
+        .bar-row { 
+            display: grid; 
+            grid-template-columns: 25% 1fr;
+            align-items: center; 
+            gap: var(--space-sm);
+            font-size: 0.8em;
+        }
+
+        .bar-label { text-align: right; opacity: 0.8; white-space: nowrap; }
+        
+        .bar-track {
+            height: clamp(10px, 1.5vh, 16px);
+            border: 1px solid var(--fg-color);
+            padding: 1px;
+            background: var(--bg-color);
+            position: relative;
+            width: 100%;
+        }
+        
+        .bar-fill {
+            height: 100%;
+            background: repeating-linear-gradient(
+                45deg, var(--fg-color), var(--fg-color) 2px, 
+                var(--bg-color) 2px, var(--bg-color) 4px
+            );
+            width: 0%; transition: width 0.2s linear;
+        }
+        .bar-fill.solid { background: var(--fg-color); }
+
+        .numeric { color: #fff; font-weight: bold; }
+
+        button {
+            margin-top: auto;
+            background: var(--bg-color); color: var(--fg-color);
+            border: 2px solid var(--fg-color); 
+            padding: var(--space-md);
+            font-family: inherit; font-weight: bold; font-size: var(--font-lg);
+            cursor: pointer; text-transform: uppercase;
+            box-shadow: 4px 4px 0 var(--dim-color);
+            width: 100%;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        button:hover { background: var(--fg-color); color: var(--bg-color); }
+        button:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--dim-color); }
+    </style>
+</head>
+<body>
+    <div class="crt-overlay"></div>
+
+    <div class="main-container">
+        <div class="canvas-wrapper">
+            <div class="overlay-text">
+                > MODE: ADAGRAD<br>
+                > SYSTEM: GLOW_GRID_V2
+            </div>
+            <canvas id="simCanvas"></canvas>
+        </div>
+
+        <div class="dashboard">
+            <h1>Sys_Mon: AdaGrad</h1>
+            
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <span class="metric-label">ITERATION</span>
+                    <span id="iter-val" class="numeric">0</span>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-label">LOSS</span>
+                    <span id="loss-val" class="numeric">0.000</span>
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="bar-group">
+                <h2>PARAM X (Flat)</h2>
+                <div class="metrics-grid" style="font-size: 0.8em; margin-bottom: 4px;">
+                    <span>Grad: <span id="grad-x-txt" class="numeric">0</span></span>
+                    <span>Acc: <span id="cache-x-txt" class="numeric">0</span></span>
+                </div>
+                
+                <div class="bar-row">
+                    <span class="bar-label">GRAD</span>
+                    <div class="bar-track"><div class="bar-fill" id="bar-grad-x"></div></div>
+                </div>
+                <div class="bar-row">
+                    <span class="bar-label">HIST</span>
+                    <div class="bar-track"><div class="bar-fill" id="bar-cache-x"></div></div>
+                </div>
+                <div class="bar-row">
+                    <span class="bar-label">STEP</span>
+                    <div class="bar-track"><div class="bar-fill solid" id="bar-lr-x" style="width: 100%"></div></div>
+                </div>
+            </div>
+
+            <div class="bar-group">
+                <h2>PARAM Y (Steep)</h2>
+                <div class="metrics-grid" style="font-size: 0.8em; margin-bottom: 4px;">
+                    <span>Grad: <span id="grad-y-txt" class="numeric">0</span></span>
+                    <span>Acc: <span id="cache-y-txt" class="numeric">0</span></span>
+                </div>
+
+                <div class="bar-row">
+                    <span class="bar-label">GRAD</span>
+                    <div class="bar-track"><div class="bar-fill" id="bar-grad-y"></div></div>
+                </div>
+                <div class="bar-row">
+                    <span class="bar-label">HIST</span>
+                    <div class="bar-track"><div class="bar-fill" id="bar-cache-y"></div></div>
+                </div>
+                <div class="bar-row">
+                    <span class="bar-label">STEP</span>
+                    <div class="bar-track"><div class="bar-fill solid" id="bar-lr-y" style="width: 100%"></div></div>
+                </div>
+            </div>
+
+            <button onclick="resetSystem()">// REBOOT</button>
+        </div>
+    </div>
+
+    <script>
+        const INITIAL_X = -4.0; 
+        const INITIAL_Y = 2.5;  
+        const BASE_LR = 0.25;    
+        const EPSILON = 1e-8;
+        const SIM_SPEED_MS = 120;
+        const MAX_CACHE_X = 2500;    
+        const MAX_CACHE_Y = 250000;  
+        const GRAD_SCALE_X = 10;     
+        const GRAD_SCALE_Y = 1;      
+
+        let wX = INITIAL_X, wY = INITIAL_Y, cacheX = 0, cacheY = 0;
+        let iteration = 0, trail = [], isRunning = false, simInterval = null;
+
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        let scaleX = 100, centerX, centerY;
+
+        function getLoss(x, y) { return (x**2) + 20*(y**2); }
+        function getGradients(x, y) { return { dx: 2*x, dy: 40*y }; }
+
+        function resize() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            centerX = canvas.width / 2;
+            centerY = canvas.height / 2;
+            scaleX = Math.min(canvas.width, canvas.height) / 8;
+            requestAnimationFrame(drawOnce);
+        }
+        
+        window.addEventListener('resize', resize);
+        window.addEventListener('orientationchange', () => setTimeout(resize, 100));
+
+        function drawOnce() {
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // BRIGHT GLOWING GRID (Isolines)
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = '#00FF41';
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = '#00FF41';
+            
+            for(let c = 1; c < 300; c += 20) {
+                ctx.globalAlpha = Math.max(0.1, 1 - c/350); // Gradient fade
+                ctx.beginPath();
+                const rx = Math.sqrt(c);
+                const ry = Math.sqrt(c/20);
+                for(let t=0; t<=Math.PI*2; t+=0.15) {
+                    const sx = centerX + (rx * Math.cos(t)) * scaleX;
+                    const sy = centerY - (ry * Math.sin(t)) * scaleX;
+                    if(t===0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+                }
+                ctx.closePath();
+                ctx.stroke();
+            }
+
+            // RESET SHADOW FOR AXES/TRAILS
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 0.3;
+            ctx.strokeStyle = '#00FF41';
+            ctx.beginPath();
+            ctx.moveTo(centerX, 0); ctx.lineTo(centerX, canvas.height);
+            ctx.moveTo(0, centerY); ctx.lineTo(canvas.width, centerY);
+            ctx.stroke(); 
+            ctx.globalAlpha = 1.0;
+
+            // TRAIL
+            trail.forEach((pos, i) => {
+                const alpha = Math.max(0.2, i / trail.length);
+                ctx.fillStyle = `rgba(0, 255, 65, ${alpha})`;
+                const sx = centerX + pos.x * scaleX, sy = centerY - pos.y * scaleX;
+                ctx.fillRect(sx + (Math.random()-0.5)*2, sy + (Math.random()-0.5)*2, 4, 4);
+            });
+
+            // AGENT (Glowing)
+            const agentX = centerX + wX * scaleX, agentY = centerY - wY * scaleX;
+            ctx.fillStyle = '#00FF41';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#00FF41';
+            ctx.fillRect(agentX - 6, agentY - 6, 12, 12);
+            ctx.shadowBlur = 0;
+        }
+
+        function animate() { drawOnce(); requestAnimationFrame(animate); }
+
+        function stepPhysics() {
+            if(!isRunning) return;
+            const g = getGradients(wX, wY);
+            cacheX += g.dx * g.dx; cacheY += g.dy * g.dy;
+            const lrX = BASE_LR / (Math.sqrt(cacheX) + EPSILON);
+            const lrY = BASE_LR / (Math.sqrt(cacheY) + EPSILON);
+            wX -= lrX * g.dx; wY -= lrY * g.dy;
+            trail.push({x: wX, y: wY});
+            if(trail.length > 150) trail.shift();
+            updateDashboard(g, lrX, lrY);
+            iteration++;
+        }
+
+        function updateDashboard(g, lrX, lrY) {
+            document.getElementById('iter-val').innerText = iteration;
+            document.getElementById('loss-val').innerText = getLoss(wX, wY).toFixed(3);
+            document.getElementById('grad-x-txt').innerText = g.dx.toFixed(1);
+            document.getElementById('cache-x-txt').innerText = cacheX.toFixed(0);
+            document.getElementById('grad-y-txt').innerText = g.dy.toFixed(1);
+            document.getElementById('cache-y-txt').innerText = cacheY.toFixed(0);
+            document.getElementById('bar-grad-x').style.width = Math.min(Math.abs(g.dx) * GRAD_SCALE_X, 100) + '%';
+            document.getElementById('bar-grad-y').style.width = Math.min(Math.abs(g.dy) * GRAD_SCALE_Y, 100) + '%';
+            document.getElementById('bar-cache-x').style.width = Math.min((cacheX/MAX_CACHE_X)*100, 100) + '%';
+            document.getElementById('bar-cache-y').style.width = Math.min((cacheY/MAX_CACHE_Y)*100, 100) + '%';
+            document.getElementById('bar-lr-x').style.width = ((lrX/BASE_LR)*100) + '%';
+            document.getElementById('bar-lr-y').style.width = ((lrY/BASE_LR)*100) + '%';
+        }
+
+        function resetSystem() {
+            wX = INITIAL_X; wY = INITIAL_Y;
+            cacheX = 0; cacheY = 0; iteration = 0; trail = [];
+            isRunning = true;
+            if (simInterval) clearInterval(simInterval);
+            simInterval = setInterval(stepPhysics, SIM_SPEED_MS);
+            updateDashboard({dx:0, dy:0}, BASE_LR, BASE_LR);
+            resize();
+        }
+
+        resize();
+        animate();
+        resetSystem();
+    </script>
+</body>
+</html>
