@@ -233,7 +233,7 @@ li { margin-bottom: 5px; }
         <div class="section-content">
             <p><strong>Backpropagation, Gradient Descent, Chain Rule, Loss Functions, Optimization Schedules, Learning Rates</strong></p>
             <div class="code-block">JUST USE ADAM LOL</div>
-            <p>Parameters are tuned by quantifying how "off" a model's predictions are [<strong>Loss Function</strong>], feeding the error backwards through layers [<strong>Backpropagation</strong>], using the <strong>Chain Rule of Differentiation</strong> to compute how each weight contributed to the loss, then adjusting weights via <strong>Gradient Descent</strong> to reduce future error.</p>
+            <p>Parameters are tuned by quantifying how "off" a model's predictions are through a[<strong>Loss Function</strong>], feeding the error backwards through layers [<strong>Backpropagation</strong>], using the <strong>Chain Rule of Differentiation</strong> to compute how each weight contributed to the loss, then adjusting weights via <strong>Gradient Descent</strong> to reduce future error.</p>
         </div>
     </details>
 
@@ -249,7 +249,7 @@ li { margin-bottom: 5px; }
     <details class="section">
         <summary>
             Batch Gradient Descent
-            <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='Optimizations/Batch.html'; v.classList.add('active');">
+            <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='Batches/batch_gd.html'; v.classList.add('active');">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
             </button>
         </summary>
@@ -257,12 +257,11 @@ li { margin-bottom: 5px; }
             <p>Most thorough but often impractical: compute gradient over the <strong>entire</strong> training dataset before one parameter update. Very accurate direction, smooth convergence, but slow and memory-heavy for large datasets.</p>
         </div>
     </details>
-
-    <!-- SGD -->
+    
     <details class="section">
         <summary>
             Stochastic Gradient Descent (SGD)
-            <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='Optimizations/SGD.html'; v.classList.add('active');">
+            <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='Batches/stochastic_batch.html'; v.classList.add('active');">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
             </button>
         </summary>
@@ -270,45 +269,42 @@ li { margin-bottom: 5px; }
             <p>Extreme opposite: process <strong>one</strong> training example at a time, compute its loss/gradient, update parameters immediately. Fast, low memory, noisy updates (helps escape local minima), but oscillates around global minima.</p>
         </div>
     </details>
-
-    <!-- Mini-Batch -->
+    
     <details class="section">
         <summary>
             Mini-Batch Gradient Descent
-            <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='Optimizations/MiniBatch.html'; v.classList.add('active');">
+            <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='Batches/mini_batch.html'; v.classList.add('active');">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
             </button>
         </summary>
         <div class="section-content">
-            <p>Best practical compromise (most common in deep learning): use a small batch (e.g., 32–256 examples). Average gradient over the batch → one update. Balances noise/speed/accuracy; enables efficient vectorization/GPU use.</p>
+            <p>Best practical compromise: use a small batch (e.g., 32–256 examples). Average gradient over the batch → one update. Balances noise/speed/accuracy; enables efficient vectorization/GPU use.</p>
         </div>
     </details>
-
+    
     <h2>Learning Rate Optimizers</h2>
-
-    <!-- AdaGrad -->
+    
     <details class="section">
         <summary>
             AdaGrad (Adaptive Gradient)
-            <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='Optimizations/AdaGrad.html'; v.classList.add('active');">
+            <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='Batches/adagrad.html'; v.classList.add('active');">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
             </button>
         </summary>
         <div class="section-content">
-            <p>Adapts learning rate <strong>per parameter</strong>: parameters with large gradients get smaller updates (rare features), infrequent ones get larger. Accumulates squared gradients indefinitely → learning rate decays to near-zero → can "freeze" learning prematurely.</p>
+            <p>Adapts learning rate <strong>per parameter</strong>: parameters with large gradients get smaller updates (rare features), infrequent ones get larger. Accumulates squared gradients indefinitely → learning rate decays to near-zero.</p>
         </div>
     </details>
-
-    <!-- AdaDelta -->
+    
     <details class="section">
         <summary>
             AdaDelta
-            <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='Optimizations/AdaDelta.html'; v.classList.add('active');">
+            <button class="eye-btn" onclick="const v=document.querySelector('.retro-viewport'); v.querySelector('iframe').src='Batches/adadelta.html'; v.classList.add('active');">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
             </button>
         </summary>
         <div class="section-content">
-            <p>Fixes AdaGrad's aggressive decay: uses decaying average (sliding window) of squared gradients instead of infinite accumulation. Also tracks history of parameter updates (Δw) to replace manual learning rate entirely. No global η needed.</p>
+            <p>Fixes AdaGrad's aggressive decay: uses decaying average (sliding window) of squared gradients instead of infinite accumulation. Also tracks history of parameter updates (Δw) to replace manual learning rate entirely.</p>
         </div>
     </details>
 
