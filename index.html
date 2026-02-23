@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Deep Learning Basics // Study Guide</title>
+
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 <style>
     /* --- STYLE CONFIGURATION --- 
        Terminal Green Ditherpunk Theme (Ported from index.html)
@@ -203,6 +207,11 @@
         white-space: pre-wrap;
     }
 
+    /* MathJax Specific Overrides to maintain the Ditherpunk aesthetic */
+    .MathJax {
+        color: var(--accent-color) !important;
+    }
+
     /* --- UI COMPONENTS --- */
 
     .dither-bg {
@@ -389,6 +398,11 @@
                 console.error('Import Failed:', error);
                 container.innerHTML = `<p style="color:red">ERROR: COULD NOT LOAD MODULE [${file}].<br>Ensure you are viewing this via a Server (GitHub Pages or Localhost), not file://</p>`;
             }
+        }
+
+        // --- TRIGGER MATHJAX RENDER AFTER DYNAMIC LOAD ---
+        if (window.MathJax) {
+            MathJax.typesetPromise().catch((err) => console.log('MathJax error: ', err.message));
         }
     }
 
